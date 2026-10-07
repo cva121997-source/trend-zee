@@ -83,7 +83,7 @@ export default function Store(){
     try{setRecentIds(JSON.parse(localStorage.getItem('tz_recent')||'[]'));}catch{}
   },[]);
 
-  async function run(fn:()=>Promise<void>){
+  async function run(fn:()=>Promise<unknown>){
     setBusy(true);
     try{await fn();}catch(e){toast.error((e as Error).message);}finally{setBusy(false);}
   }
