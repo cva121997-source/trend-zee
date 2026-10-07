@@ -163,3 +163,91 @@ export async function uploadProductImage(path:string,data:Uint8Array,contentType
   }));
   return supabasePublicStorageUrl(path);
 }
+
+const isSql=(sql:string, fragment:string)=>sql.toLowerCase().replace(/\\s+/g," ").includes(fragment.toLowerCase());
+
+function jsonValue(value:unknown){
+  if(typeof value==="string"){try{return JSON.parse(value)}catch{return value}}
+  return value;
+}
+
+async function runPrepared(sql:string,args:any[],mode:"run"|"first"|"all"){
+  const s=sql.toLowerCase().replace(/\\s+/g," ").trim();
+
+  if(s.startsWith("delete from records where id=?")){
+    await deleteRecord(String(args[0]||""));
+    return {};
+  }
+
+  if(s.startsWith("insert into records")){
+    await save(String(args[0]),String(args[1]),String(args[2]),jsonValue(args[3]));
+    return {};
+  }
+
+  if(s.startsWith("update records set data=?")){
+    const existing=await row(String(args[2]));
+    if(!existing) return {};
+    await save(existing.id,existing.kind,existing.owner,jsonValue(args[0]));
+    return {};
+  }
+
+  if(s.startsWith("select data from products where archived=")){
+    const archived=s.includes("archived=1")?1:0;
+    const rows=await productRows(archived);
+    return {results:rows.map(r=>({data:typeof r.data==="string"?r.data:JSON.stringify(r.data)}))};
+  }
+
+  if(s.startsWith("select data from products where id=?")){
+    const id=String(args[0]);
+    const archived=s.includes("archived=1")?1:s.includes("archived=0")?0:undefined;
+    const r=await productRow(id,archived);
+    if(mode==="all") return {results:r?[{data:typeof r.data==="string"?r.data:JSON.stringify(r.data)}]:[]};
+    return r?{data:typeof r.data==="string"?r.data:JSON.stringify(r.data)}:null;
+  }
+
+  if(s.startsWith("insert or ignore into products")){
+    const productId=String(args[0]);
+    const existing=await productRow(productId);
+    if(!existing) await upsertProducts([{id:productId,data:jsonValue(args[1]),archived:Number(args[2]||0)}]);
+    return {};
+  }
+
+  if(s.startsWith("insert into products")){
+    await upsertProducts([{id:String(args[0]),data:jsonValue(args[1]),archived:Number(args[2]||0)}]);
+    return {};
+  }
+
+  if(s.startsWith("update products set data=?")){
+    const id=String(args[1]), existing=await productRow(id);
+    if(!existing) return {};
+    await upsertProducts([{id,data:jsonValue(args[0]),archived:Number(existing.archived||0)}]);
+    return {};
+  }
+
+  if(s.startsWith("update products set archived=")){
+    const archived=s.includes("archived=1")?1:0;
+    await setProductArchived(String(args[0]),archived);
+    return {};
+  }
+
+  throw new Error("Unsupported database operation in Vercel Supabase adapter: "+sql);
+}
+
+export function database(){
+  return {
+    prepare(sql:string){
+      return {
+        bind(...args:any[]){
+          return {
+            run:()=>runPrepared(sql,args,"run"),
+            first:<T=any>():Promise<T|null>=>runPrepared(sql,args,"first") as Promise<T|null>,
+            all:<T=any>():Promise<{results:T[]}>=>runPrepared(sql,args,"all") as Promise<{results:T[]}>,
+          };
+        }
+      };
+    },
+    batch(statements:Array<{run:()=>Promise<unknown>}>){
+      return Promise.all(statements.map(statement=>statement.run()));
+    }
+  };
+}
