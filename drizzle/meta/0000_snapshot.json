@@ -1,0 +1,31 @@
+{
+  "version": "6",
+  "dialect": "sqlite",
+  "id": "71b9a79a-07a5-4bf5-8064-93cd308603da",
+  "prevId": "00000000-0000-0000-0000-000000000000",
+  "tables": {
+    "products": {
+      "name": "products",
+      "columns": {
+        "id": {"name": "id","type": "text","primaryKey": true,"notNull": true,"autoincrement": false},
+        "data": {"name": "data","type": "text","primaryKey": false,"notNull": true,"autoincrement": false},
+        "archived": {"name": "archived","type": "integer","primaryKey": false,"notNull": true,"autoincrement": false,"default": 0}
+      },
+      "indexes": {},"foreignKeys": {},"compositePrimaryKeys": {},"uniqueConstraints": {},"checkConstraints": {}
+    },
+    "records": {
+      "name": "records",
+      "columns": {
+        "id": {"name": "id","type": "text","primaryKey": true,"notNull": true,"autoincrement": false},
+        "kind": {"name": "kind","type": "text","primaryKey": false,"notNull": true,"autoincrement": false},
+        "owner": {"name": "owner","type": "text","primaryKey": false,"notNull": true,"autoincrement": false},
+        "data": {"name": "data","type": "text","primaryKey": false,"notNull": true,"autoincrement": false},
+        "created": {"name": "created","type": "text","primaryKey": false,"notNull": true,"autoincrement": false},
+        "updated": {"name": "updated","type": "text","primaryKey": false,"notNull": true,"autoincrement": false}
+      },
+      "indexes": {"records_kind_owner": {"name": "records_kind_owner","columns": ["kind","owner"],"isUnique": false}},
+      "foreignKeys": {},"compositePrimaryKeys": {},"uniqueConstraints": {},"checkConstraints": {}
+    }
+  },
+  "views": {},"enums": {},"_meta": {"schemas": {},"tables": {},"columns": {}},"internal": {"indexes": {}}
+}
