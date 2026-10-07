@@ -129,3 +129,5 @@ button{border:0;background:none}header{position:relative;z-index:20}.header-acti
   .story h2{font-size:48px}
   .conversion-callout{padding:65px 7%}
 }
+
+.admin-back-store{position:fixed;top:24px;left:28px;z-index:10;color:#536254;font-size:11px;letter-spacing:.08em;text-transform:uppercase;font-weight:700}.admin-back-store:hover{text-decoration:underline}@media(max-width:560px){.admin-back-store{top:15px;left:15px;font-size:10px}}
