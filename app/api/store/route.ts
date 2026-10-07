@@ -1,7 +1,7 @@
 import {NextResponse} from 'next/server';
 import {getChatGPTUser} from '@/app/chatgpt-auth';
 import {seedProducts,Product} from '@/lib/catalog';
-import {database,row,save,list,read,cookie,digest,secret,isAdmin,adminToken,sessionCookie,checkOrigin,productRows} from '@/lib/store-server';
+import {database,row,save,list,read,cookie,digest,secret,isAdmin,adminToken,sessionCookie,checkOrigin} from '@/lib/store-server';
 
 export const dynamic='force-dynamic';
 
@@ -28,11 +28,11 @@ async function catalog():Promise<Product[]>{
       db.prepare('INSERT OR IGNORE INTO records (id,kind,owner,data,created,updated) VALUES (?,?,?,?,?,?)').bind('catalog-initialized','system','system','{}',now,now),
     ]);
   }
-  return (await productRows(0)).map((r:{data:unknown})=>JSON.parse(String(r.data)));
+  return (await db.prepare('SELECT data FROM products WHERE archived=0').all<{data:string}>()).results.map(r=>JSON.parse(r.data));
 }
 async function archivedCatalog():Promise<Product[]>{
   await catalog();
-  return (await productRows(1)).map((r:{data:unknown})=>JSON.parse(String(r.data)));
+  return (await database().prepare('SELECT data FROM products WHERE archived=1').all<{data:string}>()).results.map(r=>JSON.parse(r.data));
 }
 
 
@@ -43,10 +43,8 @@ async function identity(req:Request){
   return {user,owner:user?.userId||'guest:'+anon,anon};
 }
 
-type CartData={items:any[];saved:string[]};
-type ProfileData=Record<string,any>;
-async function cart(owner:string):Promise<CartData>{return read<CartData>(await row('cart:'+owner),{items:[],saved:[]});}
-async function settings():Promise<typeof defaultSettings>{return {...defaultSettings,...read<ProfileData>(await row('settings:store'),{})};}
+async function cart(owner:string){return read(await row('cart:'+owner),{items:[],saved:[]});}
+async function settings(){return {...defaultSettings,...read(await row('settings:store'),{})};}
 async function audit(action:string,entity:string,details:Record<string,unknown>={}){
   await save('audit:'+crypto.randomUUID(),'audit','admin',{action,entity,actor:'Admin',details,at:new Date().toISOString()});
 }
@@ -310,7 +308,7 @@ export async function POST(req:Request){
       const mobile=clean(b.mobile,16);
       if(!/^\+?[0-9]{10,13}$/.test(mobile))throw new Error('Enter a valid mobile number.');
       if(b.consent!==true)throw new Error('Please agree to save your contact details.');
-      const existing=read<Record<string,any>>(await row('profile:'+owner),{});
+      const existing=read(await row('profile:'+owner),{});
       await save('profile:'+owner,'profile',owner,{...existing,mobile,verified:false,lastLogin:new Date().toISOString()});
       const c=await cart(owner);
       await save('lead:'+owner,'lead',owner,{mobile,name:existing.name||'',email:existing.email||'',items:c.items,total:c.items.reduce((sum:number,i:any)=>sum+(i.price||0)*i.quantity,0),status:'Mobile shared',consent:true,consentAt:new Date().toISOString()});
@@ -396,7 +394,7 @@ export async function POST(req:Request){
       const discount=await discountFor(b.coupon,subtotal);
       const total=subtotal-discount.discount;
       await save('profile:'+owner,'profile',owner,{...profile,verified:!!user,lastLogin:new Date().toISOString()});
-      const leadId='lead:'+owner,prior=read<Record<string,any>>(await row(leadId),{});
+      const leadId='lead:'+owner,prior=read(await row(leadId),{});
       await save(leadId,'lead',owner,{...prior,...profile,items,total,consent:true,consentAt:prior.consentAt||new Date().toISOString(),status:action==='order'?'Submitted':'Checkout started'});
       if(action==='checkoutStart')return NextResponse.json({ok:true,total,subtotal,discount:discount.discount,coupon:discount.code});
       if(!['UPI','Credit card','Debit card'].includes(b.method))throw new Error('Choose a payment method.');
