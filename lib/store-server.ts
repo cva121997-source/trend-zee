@@ -64,7 +64,11 @@ export async function list(kind:string,owner?:string){
   return rows.map(r=>({...((parseData(r.data)||{}) as Record<string,unknown>),id:r.id,owner:r.owner,created:r.created,updated:r.updated}));
 }
 
-export const read = <T=any>(record:StoreRecord|null,fallback:T|null=null):T|null => record ? parseData(record.data) as T : fallback;
+export function read<T=any>(record:StoreRecord|null): T|null;
+export function read<T=any>(record:StoreRecord|null,fallback:T): T;
+export function read<T=any>(record:StoreRecord|null,fallback:T|null=null):T|null {
+  return record ? parseData(record.data) as T : fallback;
+}
 
 export function cookie(req:Request,key:string){
   return req.headers.get("cookie")?.split("; ").find(v=>v.startsWith(key+"="))?.slice(key.length+1) || "";
@@ -159,7 +163,7 @@ export async function uploadProductImage(path:string,data:Uint8Array,contentType
   await readResponse(await request("storage","object/"+PRODUCT_IMAGE_BUCKET+"/"+path,{
     method:"POST",
     headers:{"Content-Type":contentType,"Cache-Control":"public,max-age=31536000,immutable","x-upsert":"false"},
-    body:data
+    body:new Blob([data.buffer as ArrayBuffer],{type:contentType})
   }));
   return supabasePublicStorageUrl(path);
 }
@@ -171,7 +175,17 @@ function jsonValue(value:unknown){
   return value;
 }
 
-async function runPrepared(sql:string,args:any[],mode:"run"|"first"|"all"){
+type PreparedStatement = {
+  run(): Promise<any>;
+  first<T=any>(): Promise<T|null>;
+  all<T=any>(): Promise<{results:T[]}>;
+};
+type DatabaseAdapter = {
+  prepare(sql:string): { bind(...args:any[]): PreparedStatement };
+  batch(statements:Array<{run():Promise<any>}>): Promise<any[]>;
+};
+
+async function runPrepared(sql:string,args:any[],mode:"run"|"first"|"all"):Promise<any>{
   const s=sql.toLowerCase().replace(/\\s+/g," ").trim();
 
   if(s.startsWith("delete from records where id=?")){
@@ -233,20 +247,20 @@ async function runPrepared(sql:string,args:any[],mode:"run"|"first"|"all"){
   throw new Error("Unsupported database operation in Vercel Supabase adapter: "+sql);
 }
 
-export function database(){
+export function database(): DatabaseAdapter {
   return {
     prepare(sql:string){
       return {
         bind(...args:any[]){
           return {
             run:()=>runPrepared(sql,args,"run"),
-            first:<T=any>():Promise<T|null>=>runPrepared(sql,args,"first") as Promise<T|null>,
-            all:<T=any>():Promise<{results:T[]}>=>runPrepared(sql,args,"all") as Promise<{results:T[]}>,
+            first:<T=any>():Promise<T|null>=>runPrepared(sql,args,"first"),
+            all:<T=any>():Promise<{results:T[]}>=>runPrepared(sql,args,"all"),
           };
         }
       };
     },
-    batch(statements:Array<{run:()=>Promise<unknown>}>){
+    batch(statements:Array<{run():Promise<any>}>){
       return Promise.all(statements.map(statement=>statement.run()));
     }
   };
