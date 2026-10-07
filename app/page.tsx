@@ -2,7 +2,7 @@
 
 import {useEffect,useMemo,useState} from 'react';
 import {
-  Check,ChevronRight,Clock3,Heart,Headphones,MapPin,Menu,Minus,Package,Plus,
+  ArrowRight,Check,ChevronRight,Clock3,Heart,Headphones,MapPin,Menu,Minus,Package,Plus,
   RotateCcw,Search,Share2,ShieldCheck,ShoppingBag,SlidersHorizontal,Star,Truck,UserRound,X,LockKeyhole
 } from 'lucide-react';
 import {Dialog,DialogContent,DialogDescription,DialogTitle} from '@/components/ui/dialog';
@@ -204,26 +204,13 @@ export default function Store(){
 
     <main>
       <section className="hero">
-        <div className="hero-copy">
-          <span className="eyebrow"><i className="tiny-rule"/>NEW CHAPTER · EVERYDAY EDIT</span>
-          <h1>Wear your<br/><em>next chapter.</em></h1>
-          <p>Clothing, bags and footwear chosen for the different versions of your day. Browse freely, save favourites, and build your bag before sharing any contact details.</p>
-          <button className="button" onClick={()=>browse('All')}>Explore the collection <ChevronRight size={16}/></button>
-          <div className="hero-foot">DESIGNED FOR THE DAYS THAT KEEP MOVING</div>
-        </div>
+        <div className="hero-copy"><span className="eyebrow"><i className="tiny-rule"/>NEW CHAPTER · EVERYDAY EDIT</span><h1>Get dressed for the life you <em>actually want.</em></h1><p>Easy everyday pieces for slow mornings, busy afternoons and plans that change at the last minute. Start with one piece. Let the rest of the story follow.</p><div className="hero-buttons"><button className="button" onClick={()=>browse('All')}>Shop the edit <ChevronRight size={16}/></button><button className="hero-story-link" onClick={()=>document.getElementById('story')?.scrollIntoView({behavior:'smooth'})}>Why TREND ZEE <ArrowRight size={15}/></button></div><div className="hero-foot">01 · EVERYDAY STYLE · MADE FOR WHAT'S NEXT</div></div></div>
         <div className="hero-image"><img src={editorialImages.hero} alt="Model wearing a relaxed everyday look"/><div className="hero-sticker">MADE FOR<br/><i>what’s next</i></div><div className="hero-side-note"><span>THE EVERYDAY EDIT</span><b>One good piece.<br/>A hundred good days.</b><button onClick={()=>browse('All')}>Meet the collection <ArrowRight size={14}/></button></div><span className="image-caption">TREND ZEE · EVERYDAY STORIES</span></div>
       </section>
 
       <div className="ticker"><span>SHOP YOUR WAY</span><span className="star">✦</span><span>SAVE YOUR FAVOURITES</span><span className="star">✦</span><span>TRACK EVERY ORDER</span><span className="star">✦</span><span>SUPPORT WHEN YOU NEED IT</span></div>
 
-      <section className="commerce-promises">
-        <div><ShieldCheck/><span><b>Clear order status</b><small>Paid revenue is never confused with unpaid requests.</small></span></div>
-        <div><Truck/><span><b>Delivery visibility</b><small>Courier and tracking appear when fulfilment is connected.</small></span></div>
-        <div><RotateCcw/><span><b>Return-ready account</b><small>{settings.returnsWindowDays}-day return workflow for eligible delivered paid orders.</small></span></div>
-        <div><Headphones/><span><b>Built-in support</b><small>{settings.supportHours||'Support hours available in your account.'}</small></span></div>
-      </section>
-
-      <section className="collection" id="collection">
+      <section className="chapter-strip" aria-label="TREND ZEE story"><article><span>01</span><b>Start where you are.</b><p>Simple pieces that make getting dressed easier, not louder.</p></article><article><span>02</span><b>Then go somewhere.</b><p>Looks that keep up with college, work, weekends and last-minute plans.</p></article><article><span>03</span><b>Come back for the next chapter.</b><p>Save your favourites and build a wardrobe you actually reach for.</p></article><a href="/admin" className="chapter-admin"><LockKeyhole size={15}/><span>Store owner?</span><b>Admin login</b></a></section>    <section className="collection" id="collection">
         <div className="section-heading"><div><span className="eyebrow">THE COLLECTION</span><h2>Find your everyday favourites.</h2></div><span>{filtered.length} of {products.length} pieces</span></div>
         <div className="filters">
           <div className="category-list">{availableCategories.map(c=><button key={c} className={category===c?'active':''} onClick={()=>setCategory(c)}>{c}</button>)}</div>
