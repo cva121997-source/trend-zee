@@ -43,8 +43,10 @@ async function identity(req:Request){
   return {user,owner:user?.userId||'guest:'+anon,anon};
 }
 
-async function cart(owner:string){return read(await row('cart:'+owner),{items:[],saved:[]});}
-async function settings(){return {...defaultSettings,...read(await row('settings:store'),{})};}
+type CartData={items:any[];saved:string[]};
+type ProfileData=Record<string,any>;
+async function cart(owner:string):Promise<CartData>{return read<CartData>(await row('cart:'+owner),{items:[],saved:[]});}
+async function settings():Promise<typeof defaultSettings>{return {...defaultSettings,...read<ProfileData>(await row('settings:store'),{})};}
 async function audit(action:string,entity:string,details:Record<string,unknown>={}){
   await save('audit:'+crypto.randomUUID(),'audit','admin',{action,entity,actor:'Admin',details,at:new Date().toISOString()});
 }
