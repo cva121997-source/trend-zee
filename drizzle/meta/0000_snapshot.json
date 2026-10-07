@@ -7,9 +7,28 @@
     "products": {
       "name": "products",
       "columns": {
-        "id": {"name":"id","type":"text","primaryKey":true,"notNull":true,"autoincrement":false},
-        "data": {"name":"data","type":"text","primaryKey":false,"notNull":true,"autoincrement":false},
-        "archived": {"name":"archived","type":"integer","primaryKey":false,"notNull":true,"autoincrement":false,"default":0}
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "data": {
+          "name": "data",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "archived": {
+          "name": "archived",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 0
+        }
       },
       "indexes": {},
       "foreignKeys": {},
@@ -20,14 +39,59 @@
     "records": {
       "name": "records",
       "columns": {
-        "id": {"name":"id","type":"text","primaryKey":true,"notNull":true,"autoincrement":false},
-        "kind": {"name":"kind","type":"text","primaryKey":false,"notNull":true,"autoincrement":false},
-        "owner": {"name":"owner","type":"text","primaryKey":false,"notNull":true,"autoincrement":false},
-        "data": {"name":"data","type":"text","primaryKey":false,"notNull":true,"autoincrement":false},
-        "created": {"name":"created","type":"text","primaryKey":false,"notNull":true,"autoincrement":false},
-        "updated": {"name":"updated","type":"text","primaryKey":false,"notNull":true,"autoincrement":false}
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "kind": {
+          "name": "kind",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "owner": {
+          "name": "owner",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "data": {
+          "name": "data",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "created": {
+          "name": "created",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "updated": {
+          "name": "updated",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
       },
-      "indexes": {"records_kind_owner":{"name":"records_kind_owner","columns":["kind","owner"],"isUnique":false}},
+      "indexes": {
+        "records_kind_owner": {
+          "name": "records_kind_owner",
+          "columns": [
+            "kind",
+            "owner"
+          ],
+          "isUnique": false
+        }
+      },
       "foreignKeys": {},
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
@@ -36,6 +100,12 @@
   },
   "views": {},
   "enums": {},
-  "_meta": {"schemas":{},"tables":{},"columns":{}},
-  "internal": {"indexes":{}}
+  "_meta": {
+    "schemas": {},
+    "tables": {},
+    "columns": {}
+  },
+  "internal": {
+    "indexes": {}
+  }
 }
