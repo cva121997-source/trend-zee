@@ -4,6 +4,7 @@ import {useEffect,useMemo,useState} from 'react';
 import {ArrowRight,Search} from 'lucide-react';
 import type {Product} from '@/lib/catalog';
 import {money} from '@/lib/catalog';
+import {matchesProductQuery} from '@/lib/search';
 
 export default function SearchPage(){
  const [products,setProducts]=useState<Product[]>([]);const [q,setQ]=useState('');const [loading,setLoading]=useState(true);const [recent,setRecent]=useState<string[]>([]);
