@@ -1,7 +1,7 @@
 'use client';
 
 import {useEffect} from 'react';
-import {usePathname,useSearchParams} from 'next/navigation';
+import {usePathname} from 'next/navigation';
 
 const send=(eventName:string,data:Record<string,unknown>={})=>{
   try{
@@ -13,16 +13,15 @@ const send=(eventName:string,data:Record<string,unknown>={})=>{
 
 export default function AnalyticsBeacon(){
   const pathname=usePathname();
-  const search=useSearchParams();
   useEffect(()=>{
     if(!pathname||pathname.startsWith('/admin'))return;
-    const query=search?.get('q')||'';
+    const query=new URLSearchParams(window.location.search).get('q')||'';
     send('page_view',{path:pathname,query});
     const productMatch=pathname.match(/^\/product\/([^/]+)/);
     if(productMatch)send('product_view',{path:pathname,productId:decodeURIComponent(productMatch[1])});
     if(pathname==='/shop')send('catalog_view',{path:pathname});
     if(pathname==='/search')send('search_view',{path:pathname,query});
     if(pathname==='/checkout')send('checkout_view',{path:pathname});
-  },[pathname,search]);
+  },[pathname]);
   return null;
 }
