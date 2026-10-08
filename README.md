@@ -156,3 +156,6 @@ TWILIO_FROM=<optional>
 ```
 
 Apply both SQL migrations in `drizzle/` before using normalized commerce tables and first-party analytics. Payment capture is server-verified through Razorpay checkout/signatures and webhooks; refunds use the same provider. The existing `PAYMENT_PROVIDER=mock` mode remains available for local/demo testing only.
+
+### D1 migration deployment
+The tracked database migrations are drizzle/0001_commerce_core.sql, drizzle/0002_operations_analytics.sql, and drizzle/0003_otp.sql. The db-migrations.yml GitHub Action applies them in order on pushes to main when these repository secrets are present: TREND_ZEE_D1_DATABASE_NAME, CLOUDFLARE_ACCOUNT_ID, and CLOUDFLARE_API_TOKEN. The same operation is available locally with npm run db:migrate:remote after setting those environment variables. The connected ChatGPT/GitHub tooling does not expose Cloudflare secrets, so production D1 execution is intentionally not simulated or claimed from this session.
