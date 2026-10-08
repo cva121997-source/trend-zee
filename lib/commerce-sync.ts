@@ -20,11 +20,19 @@ export async function syncAddress(addressId:string,customerId:string,address:any
 
 export async function syncProductVariants(product:any){
   const db=database(),now=new Date().toISOString(),variants=product.variantStock&&typeof product.variantStock==='object'?product.variantStock:{};
-  await db.prepare('DELETE FROM product_variants WHERE product_id=?').bind(product.id).run();
+  const activeKeys=Object.keys(variants);
+  const existing=await db.prepare('SELECT id,option_data FROM product_variants WHERE product_id=?').bind(product.id).all<any>();
+  for(const row of existing.results||[]){
+    let key='';try{key=JSON.parse(row.option_data||'{}').key||'';}catch{}
+    if(!activeKeys.includes(key))await db.prepare('UPDATE product_variants SET archived=1,updated_at=? WHERE id=?').bind(now,row.id).run();
+  }
   for(const [key,stock] of Object.entries(variants)){
-    const [size,color]=String(key).split('::');const id='VAR-'+crypto.randomUUID();
-    await db.prepare(`INSERT INTO product_variants (id,product_id,sku,barcode,size,color,option_data,price,mrp,stock,low_stock_threshold,archived,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`)
-      .bind(id,product.id,product.sku||null,null,size||null,color||null,JSON.stringify({key}),n(product.price),product.mrp||null,n(stock),5,0,now,now).run();
+    const variantId='VAR-'+await digest(product.id+'::'+key);
+    const [size,color]=String(key).split('::');
+    await db.prepare(`INSERT INTO product_variants (id,product_id,sku,barcode,size,color,option_data,price,mrp,stock,low_stock_threshold,archived,created_at,updated_at)
+      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+      ON CONFLICT(id) DO UPDATE SET sku=excluded.sku,size=excluded.size,color=excluded.color,option_data=excluded.option_data,price=excluded.price,mrp=excluded.mrp,stock=excluded.stock,archived=0,updated_at=excluded.updated_at`)
+      .bind(variantId,product.id,product.sku||null,null,size||null,color||null,JSON.stringify({key}),n(product.price),product.mrp||null,n(stock),5,0,now,now).run();
   }
 }
 
@@ -32,7 +40,7 @@ export async function syncOrder(orderId:string,owner:string,order:any){
   const db=database(),now=new Date().toISOString();
   await db.prepare(`INSERT INTO orders (id,customer_id,status,payment_status,currency,subtotal,discount,shipping,tax,total,coupon_code,payment_intent_id,courier,tracking_number,notes,placed_at,paid_at,delivered_at,cancelled_at,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
     ON CONFLICT(id) DO UPDATE SET status=excluded.status,payment_status=excluded.payment_status,subtotal=excluded.subtotal,discount=excluded.discount,shipping=excluded.shipping,tax=excluded.tax,total=excluded.total,coupon_code=excluded.coupon_code,payment_intent_id=excluded.payment_intent_id,courier=excluded.courier,tracking_number=excluded.tracking_number,notes=excluded.notes,paid_at=excluded.paid_at,delivered_at=excluded.delivered_at,cancelled_at=excluded.cancelled_at,updated_at=excluded.updated_at`)
-    .bind(orderId,owner,clean(order.status,50),clean(order.paymentStatus,50), 'INR',n(order.subtotal),n(order.discount),n(order.shipping),n(order.tax),n(order.total),clean(order.coupon,50)||null,clean(order.paymentIntentId,150)||null,clean(order.courier,120)||null,clean(order.tracking,150)||null,clean(order.note,1000)||null,order.created||now,order.paidAt||null,order.deliveredAt||null,order.cancelledAt||null,order.created||now,now).run();
+    .bind(orderId,String(owner).startsWith('guest:')?null:owner,clean(order.status,50),clean(order.paymentStatus,50), 'INR',n(order.subtotal),n(order.discount),n(order.shipping),n(order.tax),n(order.total),clean(order.coupon,50)||null,clean(order.paymentIntentId,150)||null,clean(order.courier,120)||null,clean(order.tracking,150)||null,clean(order.note,1000)||null,order.created||now,order.paidAt||null,order.deliveredAt||null,order.cancelledAt||null,order.created||now,now).run();
   await db.prepare('DELETE FROM order_items WHERE order_id=?').bind(orderId).run();
   for(const item of Array.isArray(order.items)?order.items:[]){
     await db.prepare('INSERT INTO order_items (id,order_id,product_id,variant_id,product_name,sku,size,color,quantity,unit_price,mrp,line_total) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)')
