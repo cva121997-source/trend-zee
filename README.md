@@ -129,3 +129,30 @@ The portable build runs Vinext directly without a host `timeout` command. The ma
 ## Commerce upgrade documentation
 
 See `ADMIN_UPGRADE.md` for the full storefront/admin feature set, reporting exports, data-integrity rules and production integration checklist. See `QUALITY_AUDIT.md` for validation and launch gates.
+
+
+## Commerce configuration
+The app stays in honest preview mode until production providers are configured. Set these environment variables in the deployment runtime:
+
+```env
+ADMIN_PASSWORD_HASH=<sha256-hex-of-admin-password>
+ADMIN_SESSION_SECRET=<long-random-secret>
+ADMIN_ROLE=Owner
+PAYMENT_PROVIDER=razorpay
+RAZORPAY_KEY_ID=<public-key>
+RAZORPAY_KEY_SECRET=<server-secret>
+RAZORPAY_WEBHOOK_SECRET=<webhook-secret>
+SHIPPING_PROVIDER=custom
+SHIPPING_API_URL=<your-shipping-rate-endpoint>
+SHIPPING_API_TOKEN=<optional-token>
+TAX_PROVIDER=custom
+TAX_API_URL=<your-tax-endpoint>
+TAX_API_TOKEN=<optional-token>
+RESEND_API_KEY=<optional>
+NOTIFICATION_FROM=<optional>
+TWILIO_ACCOUNT_SID=<optional>
+TWILIO_AUTH_TOKEN=<optional>
+TWILIO_FROM=<optional>
+```
+
+Apply both SQL migrations in `drizzle/` before using normalized commerce tables and first-party analytics. Payment capture is server-verified through Razorpay checkout/signatures and webhooks; refunds use the same provider. The existing `PAYMENT_PROVIDER=mock` mode remains available for local/demo testing only.
