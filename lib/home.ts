@@ -82,7 +82,7 @@ export function newSection(type:SectionType,order:number):Section{
 }
 
 export const defaultSections:Section[]=[
- { ...blank(),id:'sec-hero',type:'hero',order:0,eyebrow:'NEW CHAPTER · EVERYDAY EDIT',title:'Wear your next chapter.',subtitle:'Clothing, bags and footwear chosen for the different versions of your day.',image:'/images/hero.jpg',ctaLabel:'Shop the edit',ctaHref:'#collection',secondaryLabel:'See what is trending',secondaryHref:'#sec-trending',theme:'dark',animation:'parallax'},
+ { ...blank(),id:'sec-hero',type:'hero',order:0,eyebrow:'NEW CHAPTER · EVERYDAY EDIT',title:'Wear your next chapter.',subtitle:'Clothing, bags and footwear chosen for the different versions of your day.',image:'/images/hero.jpg',ctaLabel:'Shop the edit',ctaHref:'#collection',secondaryLabel:'See what is trending',secondaryHref:'#sec-trending',theme:'dark',animation:'parallax',productIds:['tz-001']},
  { ...blank(),id:'sec-trust',type:'trustBar',order:1,title:'',items:[
   {title:'Clear order status',text:'Know exactly where your order stands.',image:'',href:''},
   {title:'Delivery visibility',text:'Courier and tracking when connected.',image:'',href:''},
