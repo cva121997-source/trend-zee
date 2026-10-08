@@ -35,8 +35,16 @@ class SupabasePreparedStatement implements PreparedLike{
   private params:unknown[]=[];
   constructor(sql:string){this.sql=sql;}
   bind(...values:unknown[]){this.params=values;return this;}
-  async first<T=any>():Promise<T|null>{const rows=await supabaseSql(this.sql,this.params);return Array.isArray(rows)?(rows[0] as T|null):null;}
-  async all<T=any>():Promise<{results:T[]}>{const rows=await supabaseSql(this.sql,this.params);return {results:Array.isArray(rows)?rows as T[]:[]};}
+  private normalize<T=any>(row:T):T{
+    if(row&&typeof row==='object'){
+      const copy={...(row as any)};
+      if(copy.data&&typeof copy.data==='object')copy.data=JSON.stringify(copy.data);
+      return copy as T;
+    }
+    return row;
+  }
+  async first<T=any>():Promise<T|null>{const rows=await supabaseSql(this.sql,this.params);return Array.isArray(rows)&&rows[0]?this.normalize(rows[0] as T):null;}
+  async all<T=any>():Promise<{results:T[]}>{const rows=await supabaseSql(this.sql,this.params);return {results:Array.isArray(rows)?rows.map(row=>this.normalize(row as T)):[]};}
   async run(){await supabaseSql(this.sql,this.params);return {success:true};}
 }
 class SupabaseDatabase implements DatabaseLike{
