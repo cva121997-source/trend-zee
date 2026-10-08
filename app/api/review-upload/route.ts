@@ -1,4 +1,4 @@
-import {env} from 'cloudflare:workers';
+import {runtimeEnv} from '@/lib/runtime-env';
 import {getChatGPTUser} from '@/app/chatgpt-auth';
 import {database,cookie,checkOrigin} from '@/lib/store-server';
 
@@ -8,7 +8,7 @@ async function allowed(req:Request){
   const row=await database().prepare('SELECT data FROM records WHERE id=?').bind('profile:guest:'+raw).first<any>();
   return !!row&&!!JSON.parse(row.data)?.mobile;
 }
-export async function POST(req:Request){
+export async function POST(req:Request){const env=runtimeEnv();
   try{
     checkOrigin(req);
     if(!await allowed(req))return Response.json({error:'Continue as a shopper before uploading a review photo.'},{status:401});
