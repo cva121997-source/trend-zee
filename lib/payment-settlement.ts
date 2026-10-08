@@ -1,6 +1,7 @@
 import {database,save,row,read} from '@/lib/store-server';
 import {notifyOrderEvent} from '@/lib/notifications';
 import {recordAnalyticsEvent} from '@/lib/analytics';
+import {syncOrder} from '@/lib/commerce-sync';
 
 export async function settlePaidOrder(orderId:string,meta:{provider:string;providerPaymentId?:string;providerOrderId?:string}){
   const record=await row(orderId);
@@ -39,6 +40,7 @@ export async function settlePaidOrder(orderId:string,meta:{provider:string;provi
   if(payment)await db.prepare('UPDATE payments SET provider_payment_id=?,status=?,updated_at=? WHERE id=?').bind(meta.providerPaymentId||null,'paid',now,payment.id).run();
   else await db.prepare('INSERT OR IGNORE INTO payments (id,order_id,provider,provider_payment_id,provider_order_id,amount,currency,status,raw_event,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?)')
     .bind('PAY-'+crypto.randomUUID(),orderId,meta.provider,meta.providerPaymentId||null,meta.providerOrderId||null,Math.round(Number(order.total||0)),'INR','paid','',now,now).run();
+  await syncOrder(orderId,record.owner,nextOrder);
   await save('audit:'+crypto.randomUUID(),'audit','payment',{action:'Payment settled',entity:orderId,actor:'Payment provider',details:{provider:meta.provider,amount:Number(order.total)||0},at:now});
   await recordAnalyticsEvent({anonymousId:record.owner,customerId:record.owner,eventName:'payment_captured',orderId,value:Number(order.total)||0,metadata:{provider:meta.provider}});
   void notifyOrderEvent(nextOrder,'paid');
