@@ -67,7 +67,7 @@ function publicContent(data:any){
   return {
     homepageSections:(data.homepageSections||[]).filter((s:any)=>s.visible!==false&&isScheduleActive(s.scheduleStart||'',s.scheduleEnd||'')),
     collections:(data.collections||[]).filter((s:any)=>s.visible!==false&&isScheduleActive(s.scheduleStart||'',s.scheduleEnd||'')),
-    campaigns:(data.campaigns||[]).filter((s:any)=>(s.status==='live'||(s.status==='scheduled'&&isScheduleActive(s.startDate||'',s.endDate||''))))),
+    campaigns:(data.campaigns||[]).filter((s:any)=>(s.status==='live'||s.status==='scheduled')&&isScheduleActive(s.startDate||'',s.endDate||'')),
     categories:(data.categories||[]).filter((s:any)=>s.visible!==false),
   };
 }
