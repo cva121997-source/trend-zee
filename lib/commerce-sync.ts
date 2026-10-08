@@ -103,3 +103,69 @@ export async function removeAdminUser(userId:string){
   if(!userId)return;
   await database().prepare('DELETE FROM admin_users WHERE id=?').bind(userId).run();
 }
+
+export async function syncHomepageSection(section:any){
+  if(!section?.id)return;
+  const now=new Date().toISOString();
+  await database().prepare(`INSERT INTO homepage_sections (id,type,config,sort_order,visible,starts_at,ends_at,created_at,updated_at)
+    VALUES (?,?,?,?,?,?,?,?,?)
+    ON CONFLICT(id) DO UPDATE SET type=excluded.type,config=excluded.config,sort_order=excluded.sort_order,visible=excluded.visible,starts_at=excluded.starts_at,ends_at=excluded.ends_at,updated_at=excluded.updated_at`)
+    .bind(clean(section.id,120),clean(section.type,60),JSON.stringify(section),n(section.order??section.sortOrder),section.visible===false?0:1,clean(section.startsAt||section.scheduleStart,50)||null,clean(section.endsAt||section.scheduleEnd,50)||null,section.created||now,now).run();
+}
+export async function removeHomepageSection(id:string){if(id)await database().prepare('DELETE FROM homepage_sections WHERE id=?').bind(clean(id,120)).run();}
+
+export async function syncCategory(category:any){
+  if(!category?.slug)return;
+  const now=new Date().toISOString();
+  const slug=clean(category.slug,80).toLowerCase();
+  const id=clean(category.id||slug,120);
+  await database().prepare(`INSERT INTO categories (id,slug,name,description,image,banner_image,sort_order,visible,created_at,updated_at)
+    VALUES (?,?,?,?,?,?,?,?,?,?)
+    ON CONFLICT(id) DO UPDATE SET slug=excluded.slug,name=excluded.name,description=excluded.description,image=excluded.image,banner_image=excluded.banner_image,sort_order=excluded.sort_order,visible=excluded.visible,updated_at=excluded.updated_at`)
+    .bind(id,slug,clean(category.title||category.name,120),clean(category.description,500)||null,clean(category.image,2000)||null,clean(category.bannerImage,2000)||null,n(category.sortOrder),category.visible===false?0:1,category.createdAt||now,now).run();
+}
+export async function removeCategory(id:string){if(id)await database().prepare('DELETE FROM categories WHERE id=?').bind(clean(id,120)).run();}
+
+export async function syncCollection(collection:any){
+  if(!collection?.id)return;
+  const db=database(),now=new Date().toISOString(),slug=(clean(collection.slug||collection.id,120).toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/(^-|-$)/g,''))||clean(collection.id,120);
+  await db.prepare(`INSERT INTO collections (id,slug,title,description,cover_image,layout,sort_order,visible,starts_at,ends_at,created_at,updated_at)
+    VALUES (?,?,?,?,?,?,?,?,?,?,?,?)
+    ON CONFLICT(id) DO UPDATE SET slug=excluded.slug,title=excluded.title,description=excluded.description,cover_image=excluded.cover_image,layout=excluded.layout,sort_order=excluded.sort_order,visible=excluded.visible,starts_at=excluded.starts_at,ends_at=excluded.ends_at,updated_at=excluded.updated_at`)
+    .bind(clean(collection.id,120),slug,clean(collection.title,160),clean(collection.description,500)||null,clean(collection.coverImage,2000)||null,clean(collection.layout,40)||'grid',n(collection.sortOrder),collection.visible===false?0:1,clean(collection.scheduleStart,50)||null,clean(collection.scheduleEnd,50)||null,collection.createdAt||now,now).run();
+  await db.prepare('DELETE FROM collection_products WHERE collection_id=?').bind(collection.id).run();
+  for(let i=0;i<(Array.isArray(collection.productIds)?collection.productIds:[]).slice(0,100).length;i++){
+    await db.prepare('INSERT INTO collection_products (collection_id,product_id,sort_order) VALUES (?,?,?)').bind(collection.id,String(collection.productIds[i]),i).run();
+  }
+}
+export async function removeCollection(id:string){if(id)await database().prepare('DELETE FROM collections WHERE id=?').bind(clean(id,120)).run();}
+
+export async function syncCampaign(campaign:any){
+  if(!campaign?.id)return;
+  const now=new Date().toISOString();
+  await database().prepare(`INSERT INTO campaigns (id,name,title,description,desktop_image,mobile_image,cta_label,cta_href,category,discount_label,start_date,end_date,status,created_at,updated_at)
+    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+    ON CONFLICT(id) DO UPDATE SET name=excluded.name,title=excluded.title,description=excluded.description,desktop_image=excluded.desktop_image,mobile_image=excluded.mobile_image,cta_label=excluded.cta_label,cta_href=excluded.cta_href,category=excluded.category,discount_label=excluded.discount_label,start_date=excluded.start_date,end_date=excluded.end_date,status=excluded.status,updated_at=excluded.updated_at`)
+    .bind(clean(campaign.id,120),clean(campaign.name,120),clean(campaign.title,160),clean(campaign.description,500)||null,clean(campaign.desktopImage,2000)||null,clean(campaign.mobileImage,2000)||null,clean(campaign.ctaLabel,60)||null,clean(campaign.ctaHref,200)||null,clean(campaign.category,80)||null,clean(campaign.discountLabel,80)||null,clean(campaign.startDate,50)||null,clean(campaign.endDate,50)||null,clean(campaign.status,40)||'draft',campaign.createdAt||now,now).run();
+}
+export async function removeCampaign(id:string){if(id)await database().prepare('DELETE FROM campaigns WHERE id=?').bind(clean(id,120)).run();}
+
+export async function syncWishlist(customerId:string,productIds:string[]){
+  if(!customerId)return;
+  const db=database();await db.prepare('DELETE FROM wishlists WHERE customer_id=?').bind(customerId).run();
+  const now=new Date().toISOString();
+  for(const id of Array.from(new Set(productIds)).slice(0,100)){
+    await db.prepare('INSERT OR IGNORE INTO wishlists (customer_id,product_id,created_at) VALUES (?,?,?)').bind(customerId,id,now).run();
+  }
+}
+export async function syncPreferences(customerId:string,prefs:any){
+  if(!customerId)return;
+  await database().prepare(`INSERT INTO customer_preferences (customer_id,data,updated_at) VALUES (?,?,?)
+    ON CONFLICT(customer_id) DO UPDATE SET data=excluded.data,updated_at=excluded.updated_at`)
+    .bind(customerId,JSON.stringify(prefs||{}),new Date().toISOString()).run();
+}
+export async function syncCouponRedemption(redemption:any){
+  if(!redemption?.couponCode||!redemption?.orderId)return;
+  await database().prepare('INSERT OR IGNORE INTO coupon_redemptions (id,coupon_code,customer_id,order_id,amount,created_at) VALUES (?,?,?,?,?,?)')
+    .bind(clean(redemption.id||'CR-'+crypto.randomUUID(),120),clean(redemption.couponCode,30).toUpperCase(),String(redemption.customerId||'').startsWith('guest:')?null:clean(redemption.customerId,120)||null,clean(redemption.orderId,120),n(redemption.amount),redemption.createdAt||new Date().toISOString()).run();
+}
