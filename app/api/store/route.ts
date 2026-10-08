@@ -10,6 +10,7 @@ import {canAdmin,normalizeAdminRole,rolePermissions,ADMIN_ROLES} from '@/lib/rol
 import {listAnalyticsEvents} from '@/lib/analytics';
 import {notificationStatus,notifyOrderEvent} from '@/lib/notifications';
 import {paymentProvider} from '@/lib/payments';
+import {syncCustomer,syncAddress,syncProductVariants,syncOrder} from '@/lib/commerce-sync';
 import {shippingProvider} from '@/lib/shipping';
 import {taxProvider} from '@/lib/tax';
 
@@ -343,6 +344,7 @@ export async function POST(req:Request){
         const previous=await database().prepare('SELECT data FROM products WHERE id=?').bind(data.id).first<{data:string}>();
         const oldProduct=previous?JSON.parse(previous.data):null;
         await database().prepare('INSERT INTO products (id,data,archived) VALUES (?,?,0) ON CONFLICT(id) DO UPDATE SET data=excluded.data,archived=0').bind(data.id,JSON.stringify(data)).run();
+        await syncProductVariants(data);
         if(oldProduct&&number(oldProduct.stock)!==data.stock){
           await save('inventory:'+crypto.randomUUID(),'inventory','admin',{productId:data.id,productName:data.name,before:number(oldProduct.stock),after:data.stock,adjustment:data.stock-number(oldProduct.stock),reason:'Product edit',at:new Date().toISOString()});
         }
@@ -513,6 +515,7 @@ export async function POST(req:Request){
     if(action==='profile'){
       const profile=validateProfile(b.profile);
       await save('profile:'+owner,'profile',owner,{...profile,verified:!!user,lastLogin:new Date().toISOString()});
+      await syncCustomer(owner,profile);
       return NextResponse.json({ok:true,profile});
     }
 
@@ -530,6 +533,7 @@ export async function POST(req:Request){
       const p=validateProfile(b.address||{});const existing=target?read(target):{};const id=clean(b.id,120)||'address:'+crypto.randomUUID();
       if(b.isDefault===true){const current=await list('address',owner);for(const a of current)await save(a.id,'address',owner,{...a,isDefault:false});}
       await save(id,'address',owner,{...existing,...p,id,label:clean(b.label,60)||'Delivery',isDefault:b.isDefault===true,createdAt:existing.createdAt||new Date().toISOString()});
+      await syncCustomer(owner,{...p,email:guest?.email||user?.email||''}); await syncAddress(id,owner,{...p,label:clean(b.label,60)||'Delivery',isDefault:b.isDefault===true,createdAt:existing.createdAt});
       return NextResponse.json({ok:true,id});
     }
 
@@ -642,6 +646,8 @@ export async function POST(req:Request){
         database().prepare('INSERT INTO records (id,kind,owner,data,created,updated) VALUES (?,?,?,?,?,?)').bind(key,'idempotency',owner,JSON.stringify({id}),now,now),
         database().prepare('UPDATE records SET data=?,updated=? WHERE id=?').bind(JSON.stringify({...c,items:[]}),now,'cart:'+owner),
       ]);
+      const savedOrder={...profile,items:pricedItems,total,subtotal,discount:discount.discount,shipping,tax,shippingMethod:shippingMethod.id,coupon:discount.code,note:clean(b.note,1000),method:b.method,status:'Awaiting payment',paymentStatus:'Not paid',courier:'',tracking:'',created:now};
+      await syncCustomer(owner,profile); await syncOrder(id,owner,savedOrder);
       return NextResponse.json({ok:true,id,total,subtotal,discount:discount.discount,shipping,tax,shippingMethod:shippingMethod.id,coupon:discount.code});
     }
 
