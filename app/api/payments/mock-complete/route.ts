@@ -27,10 +27,10 @@ export async function POST(req:Request){
     const items=Array.isArray(order.items)?order.items:[];const db=database();
     const products=new Map<string,any>();
     for(const item of items){const p=await db.prepare('SELECT id,data FROM products WHERE id=? AND archived=0').bind(item.productId).first<any>();if(!p)throw new Error('A product in this order is no longer available.');products.set(p.id,JSON.parse(p.data));}
-    for(const item of items){const p=products.get(item.productId);if(!p||Number(p.stock)<Number(item.quantity))throw new Error('Stock changed while you were checking out. Please rebuild your bag.');}
+    for(const item of items){const p=products.get(item.productId);const variantKey=item.variantKey||[String(item.size??''),String(item.color??'')].join('::').slice(0,220);const available=Number(p?.variantStock?.[variantKey]??p?.stock??0);if(!p||available<Number(item.quantity))throw new Error('Stock changed while you were checking out. Please rebuild your bag.');}
     const now=new Date().toISOString();
     const statements:any[]=[];
-    for(const item of items){const p=products.get(item.productId);statements.push(db.prepare('UPDATE products SET data=? WHERE id=?').bind(JSON.stringify({...p,stock:Number(p.stock)-Number(item.quantity)}),p.id));}
+    for(const item of items){const p=products.get(item.productId);const variantKey=item.variantKey||[String(item.size??''),String(item.color??'')].join('::').slice(0,220);const current=Number(p.variantStock?.[variantKey]??p.stock??0);const nextVariant=p.variantStock?{...p.variantStock,[variantKey]:current-Number(item.quantity)}:undefined;const next={...p,stock:Math.max(0,Number(p.stock)-Number(item.quantity)),...(nextVariant?{variantStock:nextVariant}:{})};statements.push(db.prepare('UPDATE products SET data=? WHERE id=?').bind(JSON.stringify(next),p.id));}
     statements.push(db.prepare('UPDATE records SET data=?,updated=? WHERE id=?').bind(JSON.stringify({...order,paymentStatus:'Paid',status:'Processing',paidAt:now,paymentProvider:'mock'}),now,orderId));
     await db.batch(statements);
     await save('audit:'+crypto.randomUUID(),'audit','payment',{action:'Mock payment completed',entity:orderId,actor:'Mock payment',details:{amount:Number(order.total)||0},at:now});
