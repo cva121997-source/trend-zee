@@ -17,7 +17,7 @@ export type HomepageSection={
   collectionId:string;
   productIds:string[];
   theme:'paper'|'ink'|'forest'|'sand'|'white';
-  layout:'standard'|'split'|'immersive'|'sticky'|'marquee';
+  layout:'standard'|'split'|'immersive'|'sticky'|'marquee'|'grid';
   motion:MotionPreset;
   visible:boolean;
   sortOrder:number;
