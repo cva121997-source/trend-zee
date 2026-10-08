@@ -284,9 +284,10 @@ export async function POST(req:Request){
         const c=b.coupon||{};
         const code=clean(c.code,30).toUpperCase();
         const percent=number(c.percent,-1),minOrder=number(c.minOrder,-1);
-        const expires=clean(c.expires,10),maxDiscount=Math.max(0,number(c.maxDiscount,0)),productIds=Array.isArray(c.productIds)?c.productIds.map((x:any)=>clean(x,120)).filter(Boolean).slice(0,50):[],categories=Array.isArray(c.categories)?c.categories.map((x:any)=>clean(x,80)).filter(Boolean).slice(0,20):[];
-        if(!/^[A-Z0-9_-]{3,30}$/.test(code)||percent<1||percent>80||minOrder<0||!/^\d{4}-\d{2}-\d{2}$/.test(expires)||expires<new Date().toISOString().slice(0,10)||maxDiscount<0)throw new Error('Check coupon code, discount (1-80%), minimum order, cap and a valid future expiry.');
-        await save('coupon:'+code,'coupon','admin',{code,percent,minOrder,maxDiscount,productIds,categories,expires,active:!!c.active});
+        const expires=clean(c.expires,10),startsAt=clean(c.startsAt,10),maxDiscount=Math.max(0,number(c.maxDiscount,0)),usageLimit=Math.max(0,Math.round(number(c.usageLimit,0))),perUserLimit=Math.max(0,Math.round(number(c.perUserLimit,0))),productIds=Array.isArray(c.productIds)?c.productIds.map((x:any)=>clean(x,120)).filter(Boolean).slice(0,50):[],categories=Array.isArray(c.categories)?c.categories.map((x:any)=>clean(x,80)).filter(Boolean).slice(0,20):[];
+        const today=new Date().toISOString().slice(0,10);
+        if(!/^[A-Z0-9_-]{3,30}$/.test(code)||percent<1||percent>80||minOrder<0||!/^\d{4}-\d{2}-\d{2}$/.test(expires)||expires<today||maxDiscount<0||usageLimit<0||perUserLimit<0||!/^$|^\d{4}-\d{2}-\d{2}$/.test(startsAt)||(startsAt&&startsAt>expires))throw new Error('Check coupon dates, discount, minimum order, caps and usage limits.');
+        await save('coupon:'+code,'coupon','admin',{code,percent,minOrder,maxDiscount,usageLimit,perUserLimit,productIds,categories,startsAt,expires,active:!!c.active});
         await audit('Promotion saved',code,{percent,minOrder,active:!!c.active});
         return NextResponse.json({ok:true});
       }
