@@ -1,7 +1,7 @@
-import {env} from 'cloudflare:workers';
+import {envValue} from '@/lib/runtime-env';
 
 export type ShippingMethod={id:string;label:string;amount:number;eta:string;serviceable:boolean;provider:'preview'|'custom'};
-const config=(name:string)=>String((env as any)[name]||process.env[name]||'');
+const config=(name:string)=>envValue(name);
 export function shippingProvider(){const v=config('SHIPPING_PROVIDER').toLowerCase();return v==='custom'?'custom':'preview';}
 
 export async function quoteShipping(pincode:string,subtotal:number):Promise<ShippingMethod[]>{
