@@ -1,6 +1,6 @@
 // Trend-Zee homepage CMS model. Pure TypeScript: safe in server and client runtimes.
 export const SECTION_TYPES = [
-  'hero','trustBar','categoryShowcase','productRow','productGrid','collectionBanner',
+  'hero','trustBar','categoryShowcase','productRow','productGrid','collectionBanner','fullImage','video','brandLogos',
   'promoBanner','editorial','testimonials','countdown','recommendations','newsletter','cta'
 ] as const;
 export type SectionType=(typeof SECTION_TYPES)[number];
@@ -12,6 +12,9 @@ export const SECTION_LABELS:Record<SectionType,{label:string;hint:string}>={
   productRow:{label:'Product carousel',hint:'Swipeable products, curated or sourced from the catalogue.'},
   productGrid:{label:'Product grid',hint:'A denser product discovery section for desktop and mobile.'},
   collectionBanner:{label:'Collection banner',hint:'Editorial banner that links into a curated collection.'},
+  fullImage:{label:'Full-screen image',hint:'A cinematic full-bleed visual moment.'},
+  video:{label:'Video',hint:'A hosted campaign or editorial video with optional poster.'},
+  brandLogos:{label:'Brand logos',hint:'Partner or featured brand logos.'},
   promoBanner:{label:'Campaign / offer',hint:'Promotional moment. Use urgency only for real deadlines.'},
   editorial:{label:'Editorial story',hint:'Image + story treatment for magazine-style storytelling.'},
   testimonials:{label:'Testimonials',hint:'Only publish genuine customer quotes.'},
@@ -31,7 +34,7 @@ export type ProductSource='manual'|'newest'|'bestSellers'|'recommended'|'categor
 
 export type Section={
   id:string;type:SectionType;order:number;visible:boolean;startsAt:string;endsAt:string;
-  eyebrow:string;title:string;subtitle:string;image:string;mobileImage:string;
+  eyebrow:string;title:string;subtitle:string;image:string;mobileImage:string;video:string;
   ctaLabel:string;ctaHref:string;secondaryLabel:string;secondaryHref:string;
   align:'left'|'center'|'right';theme:'light'|'dark'|'accent';
   animation:Animation;source:ProductSource;category:string;productIds:string[];items:SectionItem[];
@@ -54,7 +57,7 @@ export function cleanSection(raw:any,fallbackOrder:number):Section{
     type,order:Number.isFinite(Number(raw?.order))?Number(raw.order):fallbackOrder,
     visible:raw?.visible!==false,startsAt:safeDate(raw?.startsAt),endsAt:safeDate(raw?.endsAt),
     eyebrow:text(raw?.eyebrow,80),title:text(raw?.title,160),subtitle:text(raw?.subtitle,700),
-    image:safeImage(raw?.image),mobileImage:safeImage(raw?.mobileImage),
+    image:safeImage(raw?.image),mobileImage:safeImage(raw?.mobileImage),video:safeHref(raw?.video),
     ctaLabel:text(raw?.ctaLabel,50),ctaHref:safeHref(raw?.ctaHref),
     secondaryLabel:text(raw?.secondaryLabel,50),secondaryHref:safeHref(raw?.secondaryHref),
     align:(ALIGNS as readonly string[]).includes(raw?.align)?raw.align:'left',
@@ -73,7 +76,7 @@ export function cleanSection(raw:any,fallbackOrder:number):Section{
 export function isLive(s:Section,now=new Date().toISOString()){return s.visible&&(!s.startsAt||s.startsAt<=now)&&(!s.endsAt||s.endsAt>=now);}
 
 const blank=():Omit<Section,'id'|'type'|'order'|'title'>=>({
-  visible:true,startsAt:'',endsAt:'',eyebrow:'',subtitle:'',image:'',mobileImage:'',
+  visible:true,startsAt:'',endsAt:'',eyebrow:'',subtitle:'',image:'',mobileImage:'',video:'',
   ctaLabel:'Shop now',ctaHref:'#collection',secondaryLabel:'',secondaryHref:'',
   align:'left',theme:'light',animation:'fade',source:'manual',category:'',productIds:[],items:[]
 });
