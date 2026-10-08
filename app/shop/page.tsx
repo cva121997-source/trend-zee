@@ -6,6 +6,7 @@ import { Toaster, toast } from 'sonner';
 import type { Product } from '@/lib/catalog';
 import { money } from '@/lib/catalog';
 import { api } from '@/lib/client';
+import { matchesProductQuery } from '@/lib/search';
 
 export default function ShopPage(){
   const [products,setProducts]=useState<Product[]>([]);
