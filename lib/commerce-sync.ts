@@ -44,7 +44,7 @@ export async function syncOrder(orderId:string,owner:string,order:any){
   await db.prepare('DELETE FROM order_items WHERE order_id=?').bind(orderId).run();
   for(const item of Array.isArray(order.items)?order.items:[]){
     await db.prepare('INSERT INTO order_items (id,order_id,product_id,variant_id,product_name,sku,size,color,quantity,unit_price,mrp,line_total) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)')
-      .bind('OI-'+crypto.randomUUID(),orderId,item.productId,null,clean(item.name,180),clean(item.sku,80)||null,clean(item.size,40)||null,clean(item.color,80)||null,n(item.quantity),n(item.price),item.mrp||null,n(item.price)*n(item.quantity)).run();
+      .bind('OI-'+crypto.randomUUID(),orderId,item.productId,item.variantKey?'VAR-'+await digest(item.productId+'::'+item.variantKey):null,clean(item.name,180),clean(item.sku,80)||null,clean(item.size,40)||null,clean(item.color,80)||null,n(item.quantity),n(item.price),item.mrp||null,n(item.price)*n(item.quantity)).run();
   }
 }
 
