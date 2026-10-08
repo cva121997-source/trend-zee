@@ -11,7 +11,7 @@ type Data={homepageSections:HomepageSection[];collections:Collection[];campaigns
 const blankSection=():HomepageSection=>({id:crypto.randomUUID(),type:'product-carousel',kicker:'',title:'',description:'',ctaLabel:'Shop now',ctaHref:'#collection',secondaryCtaLabel:'',secondaryCtaHref:'',image:'',mobileImage:'',category:'All',collectionId:'',productIds:[],theme:'paper',layout:'standard',motion:'reveal',visible:true,sortOrder:100,scheduleStart:'',scheduleEnd:''});
 const blankCollection=():Collection=>({id:crypto.randomUUID(),title:'',description:'',coverImage:'',productIds:[],layout:'grid',visible:true,sortOrder:100,scheduleStart:'',scheduleEnd:''});
 const blankCampaign=():Campaign=>({id:crypto.randomUUID(),name:'',title:'',description:'',desktopImage:'',mobileImage:'',ctaLabel:'Shop now',ctaHref:'#collection',productIds:[],category:'All',discountLabel:'',startDate:'',endDate:'',status:'draft'});
-const blankCategory=():CategoryContent=>({slug:'',title:'',description:'',image:'',bannerImage:'',visible:true,sortOrder:100});
+const blankCategory=():CategoryContent=>({id:'',slug:'',title:'',description:'',image:'',bannerImage:'',visible:true,sortOrder:100});
 
 async function uploadImage(file:File){
   const body=new FormData();body.append('file',file);
@@ -64,7 +64,7 @@ export default function ContentStudio(){
 
   async function upload(field:string,file:File){
     setUploading(field);
-    try{const url=await uploadImage(file);setSelected(current=>current?{...current,[field]:url}:current);}
+    try{const url=await uploadImage(file);setSelected((current:any)=>current?{...current,[field]:url}:current);}
     catch(e){toast.error((e as Error).message);}finally{setUploading('');}
   }
 
