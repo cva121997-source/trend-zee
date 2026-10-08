@@ -176,7 +176,7 @@ export async function GET(req:Request){
       content:commerceContent,
       user:user||(profile?.mobile?{userId:owner,email:profile.email||'',displayName:profile.name||'Guest',guest:true}:null),
       profile,cart:await cart(owner),orders:(user||profile?.mobile)?await list('order',owner):[],
-      support:(user||profile?.mobile)?await list('support',owner):[],returns:(user||profile?.mobile)?await list('return',owner):[],reviews,preferences:(user||profile?.mobile)?read(await row('preferences:'+owner),{emailUpdates:true,smsUpdates:false,personalized:true,preferredCategories:[],preferredSize:''}):null,settings:await settings(),
+      support:(user||profile?.mobile)?await list('support',owner):[],returns:(user||profile?.mobile)?await list('return',owner):[],reviews,preferences:(user||profile?.mobile)?read(await row('preferences:'+owner),{emailUpdates:true,smsUpdates:false,personalized:true,preferredCategories:[],preferredSize:''}):null,addresses:(user||profile?.mobile)?await list('address',owner):[],settings:await settings(),
       home:home.sections.filter(isLive),
     },{headers:{'Cache-Control':'no-store'}});
     if(!cookie(req,'tz_bag'))result.headers.append('Set-Cookie',sessionCookie(req,'tz_bag',anon,2592000));
@@ -480,6 +480,15 @@ export async function POST(req:Request){
       const id='newsletter:'+await digest(email);
       await save(id,'newsletter','marketing',{email,consent:true,consentAt:new Date().toISOString(),status:'subscribed'});
       return NextResponse.json({ok:true});
+    }
+
+    if(action==='address'){
+      const target=await row(clean(b.id,120));
+      if(b.remove===true){if(!target||target.kind!=='address'||target.owner!==owner)throw new Error('Address not found.');await database().prepare('DELETE FROM records WHERE id=?').bind(target.id).run();return NextResponse.json({ok:true});}
+      const p=validateProfile(b.address||{});const existing=target?read(target):{};const id=clean(b.id,120)||'address:'+crypto.randomUUID();
+      if(b.isDefault===true){const current=await list('address',owner);for(const a of current)await save(a.id,'address',owner,{...a,isDefault:false});}
+      await save(id,'address',owner,{...existing,...p,id,label:clean(b.label,60)||'Delivery',isDefault:b.isDefault===true,createdAt:existing.createdAt||new Date().toISOString()});
+      return NextResponse.json({ok:true,id});
     }
 
     if(action==='preferences'){
