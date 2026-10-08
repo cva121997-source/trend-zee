@@ -118,7 +118,7 @@ export default function Store(){
     const items=cart.items.map(i=>({...i}));
     if(found<0)items.push({productId:detail.id,quantity:1,size,color});
     else if(items[found].quantity<detail.stock&&items[found].quantity<10)items[found].quantity++;
-    else return toast.error('You have reached the available quantity for this item.');
+    else{toast.error('You have reached the available quantity for this item.');return;}
     await updateCart(items);
     toast.success('Added to your bag');
     setDetail(null);setPanel('bag');
