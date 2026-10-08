@@ -5,7 +5,13 @@ import {defaultHomepageSections,defaultCollections,defaultCampaigns,defaultCateg
 import {Section,cleanSection,defaultSections,isLive} from '@/lib/home';
 import {quoteShipping} from '@/lib/shipping';
 import {calculateTax} from '@/lib/tax';
-import {database,row,save,list,read,cookie,digest,secret,isAdmin,adminToken,sessionCookie,checkOrigin} from '@/lib/store-server';
+import {database,row,save,list,read,cookie,digest,secret,isAdmin,adminRole,adminToken,sessionCookie,checkOrigin} from '@/lib/store-server';
+import {canAdmin,normalizeAdminRole,rolePermissions,ADMIN_ROLES} from '@/lib/roles';
+import {listAnalyticsEvents} from '@/lib/analytics';
+import {notificationStatus,notifyOrderEvent} from '@/lib/notifications';
+import {paymentProvider} from '@/lib/payments';
+import {shippingProvider} from '@/lib/shipping';
+import {taxProvider} from '@/lib/tax';
 
 export const dynamic='force-dynamic';
 
@@ -155,10 +161,12 @@ export async function GET(req:Request){
       if(!await isAdmin(req))return NextResponse.json({error:'Please sign in as admin.'},{status:401});
       const commerceContent=await contentData();
       const home=await homeSections();
+      const team=(await list('admin_user')).map((x:any)=>{const {passwordHash,...safe}=x;return safe;});
       return NextResponse.json({
         products:await catalog(),archivedProducts:await archivedCatalog(),orders:await list('order'),customers:await list('profile'),leads:await list('lead'),
         feedback:await list('feedback'),coupons:await list('coupon'),returns:await list('return'),support:await list('support'),
         reviews:await list('review'),inventory:await list('inventory'),audit:await list('audit'),settings:await settings(),content:commerceContent,homeSections:home.sections,homeIsDefault:home.isDefault,
+        analyticsEvents:await listAnalyticsEvents(3000),team,adminRole:role,integrations:{payment:paymentProvider(),shipping:shippingProvider(),tax:taxProvider(),notifications:notificationStatus()},
       },{headers:{'Cache-Control':'no-store'}});
     }
 
@@ -199,15 +207,20 @@ export async function POST(req:Request){
       const key='rate:'+await digest(req.headers.get('cf-connecting-ip')||'local');
       const prev=read(await row(key),{count:0,until:0});
       if(prev.until>Date.now()&&prev.count>=8)return NextResponse.json({error:'Too many attempts. Try again in 15 minutes.'},{status:429});
-      const hash=secret('ADMIN_PASSWORD_HASH');
-      if(!hash)throw new Error('Admin sign-in is not configured.');
-      if(b.username!=='Admin'||await digest(String(b.password))!==hash){
+      const suppliedUsername=clean(b.username,120);
+      const staff=(await list('admin_user')).find((x:any)=>String(x.username||x.email||'').toLowerCase()===suppliedUsername.toLowerCase()&&x.active!==false);
+      const envHash=secret('ADMIN_PASSWORD_HASH');
+      const validStaff=staff?.passwordHash&&await digest(String(b.password))===staff.passwordHash;
+      const validEnv=!staff&&envHash&&suppliedUsername==='Admin'&&await digest(String(b.password))===envHash;
+      if(!validStaff&&!validEnv){
         await save(key,'rate','system',{count:prev.until>Date.now()?prev.count+1:1,until:Date.now()+900000});
         return NextResponse.json({error:'Username or password is incorrect.'},{status:401});
       }
       await database().prepare('DELETE FROM records WHERE id=?').bind(key).run();
-      const response=NextResponse.json({ok:true});
-      response.headers.set('Set-Cookie',sessionCookie(req,'tz_admin',await adminToken()));
+      const role=normalizeAdminRole(staff?.role||secret('ADMIN_ROLE')||'Owner');
+      const actor=String(staff?.username||suppliedUsername||'Admin');
+      const response=NextResponse.json({ok:true,role,actor,permissions:rolePermissions(role)});
+      response.headers.set('Set-Cookie',sessionCookie(req,'tz_admin',await adminToken(role)));
       return response;
     }
 
@@ -218,7 +231,9 @@ export async function POST(req:Request){
     }
 
     if(action.startsWith('admin')){
-      if(!await isAdmin(req))return NextResponse.json({error:'Please sign in as admin.'},{status:401});
+      const role=await adminRole(req);
+      if(!role)return NextResponse.json({error:'Please sign in as admin.'},{status:401});
+      if(!canAdmin(role,action))return NextResponse.json({error:`Your ${role} role cannot perform this action.`},{status:403});
 
       if(action==='adminContent'){
         const kind=clean(b.kind,40);
@@ -283,6 +298,24 @@ export async function POST(req:Request){
         await database().prepare('DELETE FROM records WHERE kind=?').bind('section').run();
         await audit('Homepage reset','homepage',{});
         return NextResponse.json({ok:true});
+      }
+
+      if(action==='adminTeamSave'){
+        const incoming=b.user||{};const username=clean(incoming.username||incoming.email,120).toLowerCase();
+        const email=clean(incoming.email,200).toLowerCase();const displayName=clean(incoming.displayName||username,120);const role=normalizeAdminRole(incoming.role);const active=incoming.active!==false;
+        if(!username||!email||!/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(email))throw new Error('Enter a valid staff username and email.');
+        const id=clean(incoming.id,120)||'admin-user:'+crypto.randomUUID();const existing=read(await row(id),{});
+        let passwordHash=existing.passwordHash||'';
+        if(incoming.password){if(String(incoming.password).length<10)throw new Error('Staff passwords must be at least 10 characters.');passwordHash=await digest(String(incoming.password));}
+        if(!passwordHash)throw new Error('A password is required for a new staff account.');
+        await save(id,'admin_user','admin',{id,username,email,displayName,role,active,passwordHash,updatedAt:new Date().toISOString(),createdAt:existing.createdAt||new Date().toISOString()});
+        await audit('Staff account saved',id,{username,role,active});
+        return NextResponse.json({ok:true,id});
+      }
+      if(action==='adminTeamRemove'){
+        const id=clean(b.id,120);if(!id)throw new Error('Staff account not found.');
+        const target=await row(id);if(!target||target.kind!=='admin_user')throw new Error('Staff account not found.');
+        await database().prepare('DELETE FROM records WHERE id=?').bind(id).run();await audit('Staff account removed',id,{});return NextResponse.json({ok:true});
       }
 
       if(action==='adminCoupon'){
@@ -395,6 +428,7 @@ export async function POST(req:Request){
         const next={...old,status:b.status,tracking:clean(b.tracking),courier:clean(b.courier),...(b.status==='Processing'&&!old.processingAt?{processingAt:now}:{}),...(b.status==='Dispatched'&&!old.dispatchedAt?{dispatchedAt:now}:{}),...(b.status==='Delivered'&&!old.deliveredAt?{deliveredAt:now}:{}),...(b.status==='Cancelled'&&!old.cancelledAt?{cancelledAt:now}:{})};
         await save(r.id,r.kind,r.owner,next);
         await audit('Order updated',r.id,{status:next.status,courier:next.courier,tracking:next.tracking});
+        if(next.status!==old.status){const notifyEvent=next.status==='Dispatched'?'shipped':next.status==='Delivered'?'delivered':next.status.toLowerCase();void notifyOrderEvent(next,notifyEvent);}
         return NextResponse.json({ok:true});
       }
 
