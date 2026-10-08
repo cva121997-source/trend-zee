@@ -166,7 +166,7 @@ export async function GET(req:Request){
       profile={...(profile||{name:user.fullName||'',email:user.email,mobile:'',address:'',city:'',pincode:''}),verified:true,lastLogin:new Date().toISOString()};
       await save('profile:'+owner,'profile',owner,profile);
     }
-    const reviews=(await list('review')).filter((r:any)=>r.status==='Published').map((r:any)=>({productId:r.productId,rating:r.rating,title:r.title,message:r.message,name:r.name,created:r.created}));
+    const reviews=(await list('review')).filter((r:any)=>r.status==='Published').map((r:any)=>({id:r.id,productId:r.productId,rating:r.rating,title:r.title,message:r.message,name:r.name,created:r.created,imageUrls:Array.isArray(r.imageUrls)?r.imageUrls:[],helpfulCount:Number(r.helpfulCount||0)}));
     const commerceContent=publicContent(await contentData());
     const home=await homeSections();
     const result=NextResponse.json({
@@ -174,7 +174,7 @@ export async function GET(req:Request){
       content:commerceContent,
       user:user||(profile?.mobile?{userId:owner,email:profile.email||'',displayName:profile.name||'Guest',guest:true}:null),
       profile,cart:await cart(owner),orders:(user||profile?.mobile)?await list('order',owner):[],
-      support:(user||profile?.mobile)?await list('support',owner):[],returns:(user||profile?.mobile)?await list('return',owner):[],reviews,settings:await settings(),
+      support:(user||profile?.mobile)?await list('support',owner):[],returns:(user||profile?.mobile)?await list('return',owner):[],reviews,preferences:(user||profile?.mobile)?read(await row('preferences:'+owner),{emailUpdates:true,smsUpdates:false,personalized:true,preferredCategories:[],preferredSize:''}):null,settings:await settings(),
       home:home.sections.filter(isLive),
     },{headers:{'Cache-Control':'no-store'}});
     if(!cookie(req,'tz_bag'))result.headers.append('Set-Cookie',sessionCookie(req,'tz_bag',anon,2592000));
@@ -471,6 +471,25 @@ export async function POST(req:Request){
       return NextResponse.json({ok:true});
     }
 
+    if(action==='preferences'){
+      const base=read(await row('preferences:'+owner),{});
+      const allowed=(Array.isArray(b.preferredCategories)?b.preferredCategories.map((x:any)=>clean(x,80)).filter(Boolean).slice(0,12):base.preferredCategories||[]);
+      const next={...base,emailUpdates:b.emailUpdates!==false,smsUpdates:b.smsUpdates===true,personalized:b.personalized!==false,preferredCategories:allowed,preferredSize:clean(b.preferredSize,40),updatedAt:new Date().toISOString()};
+      await save('preferences:'+owner,'preferences',owner,next);
+      return NextResponse.json({ok:true,preferences:next});
+    }
+
+    if(action==='reviewHelpful'){
+      const reviewId=clean(b.id,120);
+      const r=await row(reviewId);if(!r||r.kind!=='review')throw new Error('Review not found.');
+      const marker='review-helpful:'+owner+':'+reviewId;
+      if(await row(marker))return NextResponse.json({ok:true,already:true,helpfulCount:Number(read(r).helpfulCount||0)});
+      const old=read(r);const helpfulCount=Number(old.helpfulCount||0)+1;
+      await save(r.id,r.kind,r.owner,{...old,helpfulCount});
+      await save(marker,'review_helpful',owner,{reviewId,createdAt:new Date().toISOString()});
+      return NextResponse.json({ok:true,helpfulCount});
+    }
+
     if(action==='feedback'){
       if(!clean(b.message,2000)||!Number.isInteger(b.rating)||b.rating<1||b.rating>5)throw new Error('Choose a rating and write your feedback.');
       await save(crypto.randomUUID(),'feedback',owner,{name:guest?.name||user?.displayName||'Guest',email:guest?.email||user?.email||'',mobile:guest?.mobile||'',rating:b.rating,message:clean(b.message,2000),status:'New',reply:''});
@@ -518,8 +537,9 @@ export async function POST(req:Request){
       if(!Number.isInteger(rating)||rating<1||rating>5||!clean(b.message,2000))throw new Error('Choose a rating and write your review.');
       const duplicate=(await list('review',owner)).find((x:any)=>x.orderId===orderId&&x.productId===productId);
       if(duplicate)throw new Error('You already reviewed this product from this order.');
+      const imageUrls=Array.isArray(b.imageUrls)?b.imageUrls.map((x:any)=>clean(x,2000)).filter((x:string)=>x.startsWith('/api/review-image/')||x.startsWith('/api/image/')||x.startsWith('/images/')||/^https:\/\//.test(x)).slice(0,6):[];
       const id='REV-'+crypto.randomUUID().slice(0,8).toUpperCase();
-      await save(id,'review',owner,{orderId,productId,name:order.name||guest?.name||'Customer',rating,title:clean(b.title,120),message:clean(b.message,2000),status:'Pending',moderationNote:''});
+      await save(id,'review',owner,{orderId,productId,name:order.name||guest?.name||'Customer',rating,title:clean(b.title,120),message:clean(b.message,2000),imageUrls,helpfulCount:0,status:'Pending',moderationNote:''});
       return NextResponse.json({ok:true,id});
     }
 
