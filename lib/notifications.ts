@@ -1,4 +1,4 @@
-import {env} from 'cloudflare:workers';
+import {envValue} from '@/lib/runtime-env';
 
 const value=(name:string)=>envValue(name);
 const clean=(v:unknown,max=500)=>String(v??'').trim().slice(0,max);
