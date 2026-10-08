@@ -59,6 +59,7 @@ export default function Store(){
   const [note,setNote]=useState('');
   const [recentIds,setRecentIds]=useState<string[]>([]);
   const [filtersOpen,setFiltersOpen]=useState(false);
+  const [mobileNavOpen,setMobileNavOpen]=useState(false);
   const [supportForm,setSupportForm]=useState({category:'Order help',subject:'',message:''});
   const [returnReason,setReturnReason]=useState('');
   const [returnOrder,setReturnOrder]=useState<any>(null);
@@ -214,11 +215,12 @@ export default function Store(){
         <button aria-label="Saved items" onClick={()=>setPanel('saved')}><Heart size={19}/><span>{cart.saved.length||''}</span></button>
         <button aria-label="Account" onClick={()=>requireCustomer('account')}><UserRound size={19}/></button>
         <button aria-label="Shopping bag" onClick={()=>setPanel('bag')}><ShoppingBag size={19}/><span>{count||''}</span></button>
-        <button className="mobile-menu" aria-label="Menu" onClick={()=>setFiltersOpen(v=>!v)}><Menu size={20}/></button>
+        <button className="mobile-menu" aria-label={mobileNavOpen?'Close menu':'Open menu'} aria-expanded={mobileNavOpen} onClick={()=>setMobileNavOpen(v=>!v)}><Menu size={20}/></button>
       </div>
     </header>
 
     {error&&<div className="store-error"><b>We could not refresh the store.</b><span>{error}</span><button onClick={()=>load()}>Try again</button></div>}
+    {mobileNavOpen&&<div className="mobile-nav-panel" role="dialog" aria-label="Mobile navigation"><div className="mobile-nav-links"><button onClick={()=>{browse('All');setMobileNavOpen(false)}}>Shop all</button>{availableCategories.filter(c=>c!=='All').map(c=><button key={c} onClick={()=>{browse(c);setMobileNavOpen(false)}}>{c}</button>)}<a href="/wishlist" onClick={()=>setMobileNavOpen(false)}>Saved items</a><a href="/account" onClick={()=>setMobileNavOpen(false)}>Account</a><a href="/search" onClick={()=>setMobileNavOpen(false)}>Search</a><button onClick={()=>{setPanel('support');setMobileNavOpen(false)}}>Help</button></div></div>}
 
     <main>
       {home.length ? <HomeSections sections={home} products={products} renderProduct={productCard} onNavigate={homeLink}/> : <>
