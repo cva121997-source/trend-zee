@@ -1,4 +1,4 @@
-import {env} from 'cloudflare:workers';
+import {runtimeEnv} from '@/lib/runtime-env';
 import {NextResponse} from 'next/server';
 import {adminRole,checkOrigin,isAdmin} from '@/lib/store-server';
 import {canAdmin} from '@/lib/roles';
@@ -9,7 +9,7 @@ async function authorize(req:Request){
   const role=await adminRole(req);if(!role||!canAdmin(role,'adminContent'))return null;return role;
 }
 
-export async function GET(req:Request){
+export async function GET(req:Request){const env=runtimeEnv();
   const role=await authorize(req);if(!role)return NextResponse.json({error:'Content admin access required.'},{status:403});
   if(!env.BUCKET)return NextResponse.json({items:[]});
   const result=await env.BUCKET.list({limit:1000});
