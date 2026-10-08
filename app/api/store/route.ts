@@ -311,13 +311,14 @@ export async function POST(req:Request){
         if(incoming.password){if(String(incoming.password).length<10)throw new Error('Staff passwords must be at least 10 characters.');passwordHash=await digest(String(incoming.password));}
         if(!passwordHash)throw new Error('A password is required for a new staff account.');
         await save(id,'admin_user','admin',{id,username,email,displayName,role,active,passwordHash,updatedAt:new Date().toISOString(),createdAt:existing.createdAt||new Date().toISOString()});
+        await syncAdminUser({id,email,displayName,username,role,active,createdAt:existing.createdAt});
         await audit('Staff account saved',id,{username,role,active});
         return NextResponse.json({ok:true,id});
       }
       if(action==='adminTeamRemove'){
         const id=clean(b.id,120);if(!id)throw new Error('Staff account not found.');
         const target=await row(id);if(!target||target.kind!=='admin_user')throw new Error('Staff account not found.');
-        await database().prepare('DELETE FROM records WHERE id=?').bind(id).run();await audit('Staff account removed',id,{});return NextResponse.json({ok:true});
+        await database().prepare('DELETE FROM records WHERE id=?').bind(id).run();await removeAdminUser(id);await audit('Staff account removed',id,{});return NextResponse.json({ok:true});
       }
 
       if(action==='adminCoupon'){
@@ -327,7 +328,9 @@ export async function POST(req:Request){
         const expires=clean(c.expires,10),startsAt=clean(c.startsAt,10),maxDiscount=Math.max(0,number(c.maxDiscount,0)),usageLimit=Math.max(0,Math.round(number(c.usageLimit,0))),perUserLimit=Math.max(0,Math.round(number(c.perUserLimit,0))),productIds=Array.isArray(c.productIds)?c.productIds.map((x:any)=>clean(x,120)).filter(Boolean).slice(0,50):[],categories=Array.isArray(c.categories)?c.categories.map((x:any)=>clean(x,80)).filter(Boolean).slice(0,20):[];
         const today=new Date().toISOString().slice(0,10);
         if(!/^[A-Z0-9_-]{3,30}$/.test(code)||(discountType==='percent'?(percent<1||percent>80):(fixedAmount<1||fixedAmount>1000000))||minOrder<0||!/^\d{4}-\d{2}-\d{2}$/.test(expires)||expires<today||maxDiscount<0||usageLimit<0||perUserLimit<0||!/^$|^\d{4}-\d{2}-\d{2}$/.test(startsAt)||(startsAt&&startsAt>expires))throw new Error('Check coupon dates, discount, minimum order, caps and usage limits.');
-        await save('coupon:'+code,'coupon','admin',{code,discountType,percent:discountType==='percent'?percent:0,fixedAmount:discountType==='fixed'?fixedAmount:0,minOrder,maxDiscount,usageLimit,perUserLimit,productIds,categories,startsAt,expires,active:!!c.active});
+        const coupon={code,discountType,percent:discountType==='percent'?percent:0,fixedAmount:discountType==='fixed'?fixedAmount:0,minOrder,maxDiscount,usageLimit,perUserLimit,productIds,categories,startsAt,expires,active:!!c.active};
+        await save('coupon:'+code,'coupon','admin',coupon);
+        await syncCoupon(coupon);
         await audit('Promotion saved',code,{percent,minOrder,active:!!c.active});
         return NextResponse.json({ok:true});
       }
@@ -372,7 +375,9 @@ export async function POST(req:Request){
         const p:Product=JSON.parse(record.data),before=number(p.stock);
         const updated={...p,stock:desired};
         await database().prepare('UPDATE products SET data=? WHERE id=?').bind(JSON.stringify(updated),id).run();
-        await save('inventory:'+crypto.randomUUID(),'inventory','admin',{productId:id,productName:p.name,before,after:desired,adjustment:desired-before,reason,at:new Date().toISOString()});
+        const movement={id:'INV-'+crypto.randomUUID(),productId:id,productName:p.name,before,after:desired,adjustment:desired-before,reason,at:new Date().toISOString()};
+        await save('inventory:'+movement.id,'inventory','admin',movement);
+        await syncInventoryMovement(movement);
         await audit('Inventory adjusted',id,{before,after:desired,reason});
         return NextResponse.json({ok:true});
       }
