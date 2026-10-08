@@ -155,11 +155,12 @@ export async function GET(req:Request){
   try{
     const view=new URL(req.url).searchParams.get('view');
     if(view==='content-admin'){
-      if(!await isAdmin(req))return NextResponse.json({error:'Please sign in as admin.'},{status:401});
+      const role=await adminRole(req);if(!role)return NextResponse.json({error:'Please sign in as admin.'},{status:401});
+      if(!canAdmin(role,'adminContent'))return NextResponse.json({error:'Your admin role cannot manage Content Studio.'},{status:403});
       return NextResponse.json(await contentData(),{headers:{'Cache-Control':'no-store'}});
     }
     if(view==='admin'){
-      if(!await isAdmin(req))return NextResponse.json({error:'Please sign in as admin.'},{status:401});
+      const role=await adminRole(req);if(!role)return NextResponse.json({error:'Please sign in as admin.'},{status:401});
       const commerceContent=await contentData();
       const home=await homeSections();
       const team=(await list('admin_user')).map((x:any)=>{const {passwordHash,...safe}=x;return safe;});
