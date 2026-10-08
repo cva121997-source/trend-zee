@@ -1,4 +1,4 @@
-import {env} from 'cloudflare:workers';
+import {envValue} from '@/lib/runtime-env';
 import {database,digest,secret} from '@/lib/store-server';
 import {sendSms} from '@/lib/notifications';
 
