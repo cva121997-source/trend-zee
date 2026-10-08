@@ -574,7 +574,9 @@ export async function POST(req:Request){
       const subject=clean(b.subject,160),message=clean(b.message,3000),category=clean(b.category,60)||'General';
       if(!subject||!message)throw new Error('Add a subject and message.');
       const id='SUP-'+crypto.randomUUID().slice(0,8).toUpperCase();
-      await save(id,'support',owner,{name:guest?.name||user?.displayName||'Guest',email:guest?.email||user?.email||'',mobile:guest?.mobile||'',category,subject,message,status:'New',internalNote:''});
+      const ticket={id,owner,name:guest?.name||user?.displayName||'Guest',email:guest?.email||user?.email||'',mobile:guest?.mobile||'',category,subject,message,status:'New',internalNote:''};
+      await save(id,'support',owner,ticket);
+      await syncSupportTicket(ticket);
       return NextResponse.json({ok:true,id});
     }
 
@@ -583,7 +585,8 @@ export async function POST(req:Request){
       if(!r||r.kind!=='order'||r.owner!==owner)throw new Error('Order not found.');
       const old=read(r);
       if(old.paymentStatus==='Paid'||old.status!=='Awaiting payment')throw new Error('This order can no longer be cancelled here. Please contact support.');
-      await save(r.id,r.kind,r.owner,{...old,status:'Cancelled',cancelReason:clean(b.reason,500)||'Cancelled by customer',cancelledAt:old.cancelledAt||new Date().toISOString()});
+      const next={...old,status:'Cancelled',cancelReason:clean(b.reason,500)||'Cancelled by customer',cancelledAt:old.cancelledAt||new Date().toISOString()};
+      await save(r.id,r.kind,r.owner,next);await syncOrder(r.id,r.owner,next);
       return NextResponse.json({ok:true});
     }
 
@@ -598,7 +601,9 @@ export async function POST(req:Request){
       const existing=(await list('return',owner)).find((x:any)=>x.orderId===orderId&&!['Rejected','Closed'].includes(x.status));
       if(existing)return NextResponse.json({ok:true,id:existing.id});
       const id='RET-'+crypto.randomUUID().slice(0,8).toUpperCase();
-      await save(id,'return',owner,{orderId,reason:clean(b.reason,1000),status:'Requested',items:old.items,total:old.total,refundAmount:old.total,name:old.name,email:old.email,mobile:old.mobile,internalNote:''});
+      const returnCase={id,owner,orderId,reason:clean(b.reason,1000),status:'Requested',items:old.items,total:old.total,refundAmount:old.total,name:old.name,email:old.email,mobile:old.mobile,internalNote:''};
+      await save(id,'return',owner,returnCase);
+      await syncReturnCase(returnCase);
       return NextResponse.json({ok:true,id});
     }
 
@@ -613,7 +618,8 @@ export async function POST(req:Request){
       if(duplicate)throw new Error('You already reviewed this product from this order.');
       const imageUrls=Array.isArray(b.imageUrls)?b.imageUrls.map((x:any)=>clean(x,2000)).filter((x:string)=>x.startsWith('/api/review-image/')||x.startsWith('/api/image/')||x.startsWith('/images/')||/^https:\/\//.test(x)).slice(0,6):[];
       const id='REV-'+crypto.randomUUID().slice(0,8).toUpperCase();
-      await save(id,'review',owner,{orderId,productId,name:order.name||guest?.name||'Customer',rating,title:clean(b.title,120),message:clean(b.message,2000),imageUrls,helpfulCount:0,status:'Pending',moderationNote:''});
+      const review={id,owner,orderId,productId,name:order.name||guest?.name||'Customer',rating,title:clean(b.title,120),message:clean(b.message,2000),imageUrls,helpfulCount:0,status:'Pending',moderationNote:''};
+      await save(id,'review',owner,review);await syncReview(review);
       return NextResponse.json({ok:true,id});
     }
 
