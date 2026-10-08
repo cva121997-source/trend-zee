@@ -423,7 +423,7 @@ export async function POST(req:Request){
     const {user,owner}=await identity(req);
 
     if(action==='coupon'){
-      const c=await cart(owner),items=await validatedItems(c.items); const priced=items.map((i:any)=>({...i,category:(await catalog()).find(p=>p.id===i.productId)?.category||''}));
+      const c=await cart(owner),items=await validatedItems(c.items); const products=await catalog(); const priced=items.map((i:any)=>({...i,category:products.find((p:Product)=>p.id===i.productId)?.category||''}));
       return NextResponse.json(await discountFor(b.code,priced.reduce((sum:number,i:any)=>sum+i.price*i.quantity,0),priced,owner));
     }
 
