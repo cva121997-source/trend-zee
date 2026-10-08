@@ -2,6 +2,7 @@ import {NextResponse} from 'next/server';
 import {getChatGPTUser} from '@/app/chatgpt-auth';
 import {seedProducts,Product} from '@/lib/catalog';
 import {defaultHomepageSections,defaultCollections,defaultCampaigns,defaultCategories,isScheduleActive,HomepageSection,Collection,Campaign,CategoryContent} from '@/lib/content';
+import {Section,cleanSection,defaultSections,isLive} from '@/lib/home';
 import {database,row,save,list,read,cookie,digest,secret,isAdmin,adminToken,sessionCookie,checkOrigin} from '@/lib/store-server';
 
 export const dynamic='force-dynamic';
@@ -69,6 +70,21 @@ function publicContent(data:any){
   };
 }
 
+async function storedSections():Promise<Section[]>{
+  const rows=await list('section') as any[];
+  return rows.map(({owner,created,updated,...r})=>({...r,id:String(r.id).replace(/^section:/,'')} as Section)).sort((a,b)=>a.order-b.order);
+}
+async function homeSections():Promise<{sections:Section[];isDefault:boolean}>{
+  const stored=await storedSections();
+  return stored.length?{sections:stored,isDefault:false}:{sections:defaultSections,isDefault:true};
+}
+async function materializeSections(){
+  const stored=await storedSections();
+  if(stored.length)return stored;
+  for(const section of defaultSections)await save('section:'+section.id,'section','admin',section);
+  return defaultSections;
+}
+
 async function identity(req:Request){
   const user=await getChatGPTUser();
   const raw=cookie(req,'tz_bag');
@@ -106,13 +122,20 @@ function validateProfile(b:any){
   return p;
 }
 
-async function discountFor(value:any,subtotal:number){
+async function discountFor(value:any,subtotal:number,items:any[]=[],owner=''){
   const code=clean(value,30).toUpperCase();
   if(!code)return {code:'',discount:0};
   const c=read(await row('coupon:'+code));
-  if(!c||!c.active||c.expires<new Date().toISOString().slice(0,10))throw new Error('This coupon is unavailable or has expired.');
+  const today=new Date().toISOString().slice(0,10);
+  if(!c||!c.active||c.expires<today||(c.startsAt&&c.startsAt>today))throw new Error('This coupon is unavailable or has expired.');
   if(subtotal<c.minOrder)throw new Error('This coupon needs a minimum order of INR '+c.minOrder);
-  const raw=Math.round(subtotal*c.percent/100),discount=c.maxDiscount>0?Math.min(raw,c.maxDiscount):raw;
+  const eligible=items.length?items.filter((i:any)=>!(c.productIds?.length||c.categories?.length)||c.productIds?.includes(i.productId)||c.categories?.includes(i.category)):items;
+  if((c.productIds?.length||c.categories?.length)&&!eligible.length)throw new Error('This coupon does not apply to the products in your bag.');
+  const uses=(await list('order')).filter((o:any)=>o.coupon===code);
+  if(c.usageLimit>0&&uses.length>=c.usageLimit)throw new Error('This coupon has reached its usage limit.');
+  if(owner&&c.perUserLimit>0){const userUses=uses.filter((o:any)=>o.owner===owner);if(userUses.length>=c.perUserLimit)throw new Error('This coupon has reached its per-customer limit.');}
+  const eligibleSubtotal=eligible.reduce((s:number,i:any)=>s+Number(i.price||0)*Number(i.quantity||0),0);
+  const raw=Math.round(eligibleSubtotal*c.percent/100),discount=c.maxDiscount>0?Math.min(raw,c.maxDiscount):raw;
   return {code,discount};
 }
 
@@ -126,10 +149,11 @@ export async function GET(req:Request){
     if(view==='admin'){
       if(!await isAdmin(req))return NextResponse.json({error:'Please sign in as admin.'},{status:401});
       const commerceContent=await contentData();
+      const home=await homeSections();
       return NextResponse.json({
         products:await catalog(),archivedProducts:await archivedCatalog(),orders:await list('order'),customers:await list('profile'),leads:await list('lead'),
         feedback:await list('feedback'),coupons:await list('coupon'),returns:await list('return'),support:await list('support'),
-        reviews:await list('review'),inventory:await list('inventory'),audit:await list('audit'),settings:await settings(),content:commerceContent,
+        reviews:await list('review'),inventory:await list('inventory'),audit:await list('audit'),settings:await settings(),content:commerceContent,homeSections:home.sections,homeIsDefault:home.isDefault,
       },{headers:{'Cache-Control':'no-store'}});
     }
 
@@ -141,12 +165,14 @@ export async function GET(req:Request){
     }
     const reviews=(await list('review')).filter((r:any)=>r.status==='Published').map((r:any)=>({productId:r.productId,rating:r.rating,title:r.title,message:r.message,name:r.name,created:r.created}));
     const commerceContent=publicContent(await contentData());
+    const home=await homeSections();
     const result=NextResponse.json({
       products:await catalog(),
       content:commerceContent,
       user:user||(profile?.mobile?{userId:owner,email:profile.email||'',displayName:profile.name||'Guest',guest:true}:null),
       profile,cart:await cart(owner),orders:(user||profile?.mobile)?await list('order',owner):[],
       support:(user||profile?.mobile)?await list('support',owner):[],returns:(user||profile?.mobile)?await list('return',owner):[],reviews,settings:await settings(),
+      home:home.sections.filter(isLive),
     },{headers:{'Cache-Control':'no-store'}});
     if(!cookie(req,'tz_bag'))result.headers.append('Set-Cookie',sessionCookie(req,'tz_bag',anon,2592000));
     return result;
@@ -221,6 +247,37 @@ export async function POST(req:Request){
         }
         await audit('Content saved',prefix+id,{kind});
         return NextResponse.json({ok:true,id});
+      }
+
+      if(action==='adminSection'){
+        const existing=await materializeSections();
+        const incoming=b.section||{};
+        const known=existing.find(x=>x.id===incoming.id);
+        const next=cleanSection(incoming,known?known.order:existing.length);
+        await save('section:'+next.id,'section','admin',next);
+        await audit(known?'Homepage section updated':'Homepage section added',next.id,{type:next.type,title:next.title,visible:next.visible});
+        return NextResponse.json({ok:true,id:next.id});
+      }
+      if(action==='adminSectionOrder'){
+        const ids=Array.isArray(b.ids)?b.ids.map((x:any)=>clean(x,80)).filter(Boolean).slice(0,50):[];
+        if(!ids.length)throw new Error('Choose at least one homepage section.');
+        const existing=await materializeSections();
+        const byId=new Map(existing.map(x=>[x.id,x]));
+        for(let i=0;i<ids.length;i++){const section=byId.get(ids[i]);if(section)await save('section:'+section.id,'section','admin',{...section,order:i});}
+        await audit('Homepage section order changed','homepage',{count:ids.length});
+        return NextResponse.json({ok:true});
+      }
+      if(action==='adminSectionDelete'){
+        const id=clean(b.id,80);
+        if(!id)throw new Error('Section not found.');
+        await database().prepare('DELETE FROM records WHERE id=? AND kind=?').bind('section:'+id,'section').run();
+        await audit('Homepage section removed',id,{});
+        return NextResponse.json({ok:true});
+      }
+      if(action==='adminSectionsReset'){
+        await database().prepare('DELETE FROM records WHERE kind=?').bind('section').run();
+        await audit('Homepage reset','homepage',{});
+        return NextResponse.json({ok:true});
       }
 
       if(action==='adminCoupon'){
@@ -366,8 +423,8 @@ export async function POST(req:Request){
     const {user,owner}=await identity(req);
 
     if(action==='coupon'){
-      const c=await cart(owner),items=await validatedItems(c.items);
-      return NextResponse.json(await discountFor(b.code,items.reduce((sum:number,i:any)=>sum+i.price*i.quantity,0)));
+      const c=await cart(owner),items=await validatedItems(c.items); const priced=items.map((i:any)=>({...i,category:(await catalog()).find(p=>p.id===i.productId)?.category||''}));
+      return NextResponse.json(await discountFor(b.code,priced.reduce((sum:number,i:any)=>sum+i.price*i.quantity,0),priced,owner));
     }
 
     if(action==='cart'){
@@ -400,6 +457,14 @@ export async function POST(req:Request){
       const profile=validateProfile(b.profile);
       await save('profile:'+owner,'profile',owner,{...profile,verified:!!user,lastLogin:new Date().toISOString()});
       return NextResponse.json({ok:true,profile});
+    }
+
+    if(action==='newsletter'){
+      const email=clean(b.email,200).toLowerCase();
+      if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)||b.consent!==true)throw new Error('Enter a valid email and agree to receive updates.');
+      const id='newsletter:'+await digest(email);
+      await save(id,'newsletter','marketing',{email,consent:true,consentAt:new Date().toISOString(),status:'subscribed'});
+      return NextResponse.json({ok:true});
     }
 
     if(action==='feedback'){
@@ -468,8 +533,10 @@ export async function POST(req:Request){
       }
       const c=await cart(owner),items=await validatedItems(c.items);
       if(!items.length)throw new Error('Your shopping bag is empty.');
-      const subtotal=items.reduce((sum:number,i:any)=>sum+i.price*i.quantity,0);
-      const discount=await discountFor(b.coupon,subtotal);
+      const products=await catalog();
+      const pricedItems=items.map((i:any)=>({...i,category:products.find((p:Product)=>p.id===i.productId)?.category||''}));
+      const subtotal=pricedItems.reduce((sum:number,i:any)=>sum+i.price*i.quantity,0);
+      const discount=await discountFor(b.coupon,subtotal,pricedItems,owner);
       const total=subtotal-discount.discount;
       await save('profile:'+owner,'profile',owner,{...profile,verified:!!user,lastLogin:new Date().toISOString()});
       const leadId='lead:'+owner,prior=read(await row(leadId),{});
@@ -478,7 +545,7 @@ export async function POST(req:Request){
       if(!['UPI','Credit card','Debit card'].includes(b.method))throw new Error('Choose a payment method.');
       const id='TZ-'+crypto.randomUUID().slice(0,8).toUpperCase(),now=new Date().toISOString();
       await database().batch([
-        database().prepare('INSERT INTO records (id,kind,owner,data,created,updated) VALUES (?,?,?,?,?,?)').bind(id,'order',owner,JSON.stringify({...profile,items,total,subtotal,discount:discount.discount,coupon:discount.code,note:clean(b.note,1000),method:b.method,status:'Awaiting payment',paymentStatus:'Not paid',courier:'',tracking:''}),now,now),
+        database().prepare('INSERT INTO records (id,kind,owner,data,created,updated) VALUES (?,?,?,?,?,?)').bind(id,'order',owner,JSON.stringify({...profile,items:pricedItems,total,subtotal,discount:discount.discount,coupon:discount.code,note:clean(b.note,1000),method:b.method,status:'Awaiting payment',paymentStatus:'Not paid',courier:'',tracking:''}),now,now),
         database().prepare('INSERT INTO records (id,kind,owner,data,created,updated) VALUES (?,?,?,?,?,?)').bind(key,'idempotency',owner,JSON.stringify({id}),now,now),
         database().prepare('UPDATE records SET data=?,updated=? WHERE id=?').bind(JSON.stringify({...c,items:[]}),now,'cart:'+owner),
       ]);
