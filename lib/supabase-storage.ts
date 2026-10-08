@@ -1,6 +1,6 @@
 import {envValue} from '@/lib/runtime-env';
 
-const projectUrl=()=> (envValue('SUPABASE_URL')||'https://hzlsjwcqdhdckftisgso.supabase.co').replace(/\\/$/,'');
+const projectUrl=()=> (envValue('SUPABASE_URL')||'https://hzlsjwcqdhdckftisgso.supabase.co').replace(/\/$/,'');
 const serviceKey=()=>envValue('SUPABASE_SERVICE_ROLE_KEY');
 
 export function supabaseStorageConfigured(){return !!serviceKey();}
