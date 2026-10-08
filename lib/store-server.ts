@@ -10,8 +10,8 @@ type DatabaseLike={prepare(sql:string):PreparedLike;batch(statements:PreparedLik
 
 function normalizeSql(sql:string){
   let q=sql.trim().replace(/;\s*$/,'');
-  if(/INSERT\s+OR\s+IGNORE\s+INTO/i.test(q)&&!/ON\\s+CONFLICT/i.test(q)){
-    q=q.replace(/INSERT\\s+OR\\s+IGNORE\\s+INTO/i,'INSERT INTO')+' ON CONFLICT DO NOTHING';
+  if(/INSERT\s+OR\s+IGNORE\s+INTO/i.test(q)&&!/ON\s+CONFLICT/i.test(q)){
+    q=q.replace(/INSERT\s+OR\s+IGNORE\s+INTO/i,'INSERT INTO')+' ON CONFLICT DO NOTHING';
   }
   return q;
 }
