@@ -1,6 +1,6 @@
-import {env} from 'cloudflare:workers';
+import {envValue} from '@/lib/runtime-env';
 
-const config=(name:string)=>String((env as any)[name]||process.env[name]||'');
+const config=(name:string)=>envValue(name);
 export function taxProvider(){return config('TAX_PROVIDER').toLowerCase()==='custom'?'custom':'preview';}
 export async function calculateTax(subtotal:number,context:Record<string,unknown>={}){
   if(taxProvider()==='custom'){
