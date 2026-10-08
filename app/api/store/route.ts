@@ -253,7 +253,7 @@ export async function POST(req:Request){
         if(kind==='homepage_section'){
           const normalized:HomepageSection={id,type:['hero','ticker','category-showcase','product-carousel','product-grid','collection-banner','full-image','video','editorial','testimonials','promo','newsletter','countdown','recommendations','best-sellers','new-arrivals','final-cta'].includes(base.type)?base.type:'product-carousel',kicker:clean(base.kicker,80),title:clean(base.title,160),description:clean(base.description,500),ctaLabel:clean(base.ctaLabel,60),ctaHref:clean(base.ctaHref,200),secondaryCtaLabel:clean(base.secondaryCtaLabel,60),secondaryCtaHref:clean(base.secondaryCtaHref,200),image:clean(base.image,2000),mobileImage:clean(base.mobileImage,2000),category:clean(base.category,80)||'All',collectionId:clean(base.collectionId,120),productIds:Array.isArray(base.productIds)?base.productIds.map((x:any)=>clean(x,120)).filter(Boolean).slice(0,40):[],theme:['paper','ink','forest','sand','white'].includes(base.theme)?base.theme:'paper',layout:['standard','split','immersive','sticky','marquee','grid'].includes(base.layout)?base.layout:'standard',motion:['none','fade','slide','scale','parallax','horizontal','sticky','reveal','product-reveal'].includes(base.motion)?base.motion:'fade',visible:base.visible!==false,sortOrder:Math.max(0,Math.round(number(base.sortOrder,100))),scheduleStart:clean(base.scheduleStart,40),scheduleEnd:clean(base.scheduleEnd,40)};
           if(!normalized.title)throw new Error('Give the homepage section a title.');
-          await save(prefix+id,kind,'admin',normalized);
+          await save(prefix+id,kind,'admin',normalized);await syncCampaign(normalized);await syncCampaign(normalized);await syncCollection(normalized);await syncHomepageSection(normalized);
         } else if(kind==='collection'){
           const normalized:Collection={id,title:clean(base.title,160),description:clean(base.description,500),coverImage:clean(base.coverImage,2000),productIds:Array.isArray(base.productIds)?base.productIds.map((x:any)=>clean(x,120)).filter(Boolean).slice(0,60):[],layout:['editorial','grid','split'].includes(base.layout)?base.layout:'grid',visible:base.visible!==false,sortOrder:Math.max(0,Math.round(number(base.sortOrder,100))),scheduleStart:clean(base.scheduleStart,40),scheduleEnd:clean(base.scheduleEnd,40)};
           if(!normalized.title||!normalized.coverImage)throw new Error('A collection needs a title and cover image.');
@@ -265,7 +265,7 @@ export async function POST(req:Request){
         } else {
           const normalized:CategoryContent={id:clean(base.slug,80),slug:clean(base.slug,80).toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/(^-|-$)/g,''),title:clean(base.title,120),description:clean(base.description,300),image:clean(base.image,2000),bannerImage:clean(base.bannerImage,2000),visible:base.visible!==false,sortOrder:Math.max(0,Math.round(number(base.sortOrder,100)))};
           if(!normalized.slug||!normalized.title||!normalized.image)throw new Error('A category needs a title and image.');
-          await save(prefix+normalized.slug,kind,'admin',normalized);
+          await save(prefix+normalized.slug,kind,'admin',normalized);await syncCategory(normalized);
         }
         await audit('Content saved',prefix+id,{kind});
         return NextResponse.json({ok:true,id});
