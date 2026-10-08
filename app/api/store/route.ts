@@ -504,14 +504,16 @@ export async function POST(req:Request){
       if(!/^\+?[0-9]{10,13}$/.test(mobile))throw new Error('Enter a valid mobile number.');
       if(b.consent!==true)throw new Error('Please agree to save your contact details.');
       const existing=read(await row('profile:'+owner),{});
-      await save('profile:'+owner,'profile',owner,{...existing,mobile,verified:false,lastLogin:new Date().toISOString()});
+      const verified=b.verified===true||existing.mobile===mobile&&existing.mobileVerified===true;
+      if(b.verified===true&&existing.mobile!==mobile)throw new Error('Verify the new mobile number before saving it.');
+      await save('profile:'+owner,'profile',owner,{...existing,mobile,mobileVerified:verified,verified:false,lastLogin:new Date().toISOString()});
       const c=await cart(owner);
       await save('lead:'+owner,'lead',owner,{mobile,name:existing.name||'',email:existing.email||'',items:c.items,total:c.items.reduce((sum:number,i:any)=>sum+(i.price||0)*i.quantity,0),status:'Mobile shared',consent:true,consentAt:new Date().toISOString()});
       return NextResponse.json({ok:true});
     }
 
     const guest=read(await row('profile:'+owner));
-    if(!user&&!guest?.mobile)return NextResponse.json({error:'Enter your mobile number to continue.'},{status:401});
+    if(!user&&(!guest?.mobile||guest.mobileVerified!==true))return NextResponse.json({error:'Verify your mobile number to continue.'},{status:401});
 
     if(action==='profile'){
       const profile=validateProfile(b.profile);
