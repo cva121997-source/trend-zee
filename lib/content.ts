@@ -56,6 +56,7 @@ export type Campaign={
 };
 
 export type CategoryContent={
+  id:string;
   slug:string;
   title:string;
   description:string;
@@ -113,10 +114,10 @@ export const defaultCampaigns:Campaign[]=[
 ];
 
 export const defaultCategories:CategoryContent[]=[
-  {slug:'clothing',title:'Clothing',description:'Everyday layers with a little more personality.',image:'/images/tee.jpg',bannerImage:'/images/shirt.jpg',visible:true,sortOrder:10},
-  {slug:'bags',title:'Bags',description:'Carry what the day asks for.',image:'/images/bag.jpg',bannerImage:'/images/bag.jpg',visible:true,sortOrder:20},
-  {slug:'footwear',title:'Shoes & Sandals',description:'A better step changes the whole day.',image:'/images/sneaker.jpg',bannerImage:'/images/sandal.jpg',visible:true,sortOrder:30},
-  {slug:'slippers',title:'Slippers',description:'Off-duty, without the off-brand feeling.',image:'/images/slide.jpg',bannerImage:'/images/slide.jpg',visible:true,sortOrder:40},
+  {id:'clothing',slug:'clothing',title:'Clothing',description:'Everyday layers with a little more personality.',image:'/images/tee.jpg',bannerImage:'/images/shirt.jpg',visible:true,sortOrder:10},
+  {id:'bags',slug:'bags',title:'Bags',description:'Carry what the day asks for.',image:'/images/bag.jpg',bannerImage:'/images/bag.jpg',visible:true,sortOrder:20},
+  {id:'footwear',slug:'footwear',title:'Shoes & Sandals',description:'A better step changes the whole day.',image:'/images/sneaker.jpg',bannerImage:'/images/sandal.jpg',visible:true,sortOrder:30},
+  {id:'slippers',slug:'slippers',title:'Slippers',description:'Off-duty, without the off-brand feeling.',image:'/images/slide.jpg',bannerImage:'/images/slide.jpg',visible:true,sortOrder:40},
 ];
 
 export function isScheduleActive(start:string,end:string,now=new Date()):boolean{
