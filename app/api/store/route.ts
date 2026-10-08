@@ -376,6 +376,14 @@ export async function POST(req:Request){
         return NextResponse.json({ok:true,settings:next});
       }
 
+      if(action==='adminCustomer'){
+        const id=clean(b.id,120);const record=await row(id);if(!record||record.kind!=='profile')throw new Error('Customer profile not found.');
+        const old=read(record);const accountStatus=['active','suspended'].includes(b.accountStatus)?b.accountStatus:'active';const segment=['VIP','Repeat','Standard','At risk'].includes(b.segment)?b.segment:'Standard';
+        await save(record.id,'profile',record.owner,{...old,accountStatus,segment,adminNote:clean(b.adminNote,1000)});
+        await audit('Customer profile updated',record.id,{accountStatus,segment});
+        return NextResponse.json({ok:true});
+      }
+
       const r=await row(clean(b.id));
       if(!r)throw new Error('Record not found.');
       const old=read(r);
