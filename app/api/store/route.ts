@@ -10,7 +10,7 @@ import {canAdmin,normalizeAdminRole,rolePermissions} from '@/lib/roles';
 import {listAnalyticsEvents} from '@/lib/analytics';
 import {notificationStatus,notifyOrderEvent} from '@/lib/notifications';
 import {paymentProvider} from '@/lib/payments';
-import {syncCustomer,syncAddress,syncProductVariants,syncOrder,syncInventoryMovement,syncCoupon,syncReview,syncSupportTicket,syncReturnCase,syncAdminUser,removeAdminUser} from '@/lib/commerce-sync';
+import {syncCustomer,syncAddress,syncProductVariants,syncOrder,syncInventoryMovement,syncCoupon,syncReview,syncSupportTicket,syncReturnCase,syncAdminUser,removeAdminUser,syncHomepageSection,removeHomepageSection,syncCategory,removeCategory,syncCollection,removeCollection,syncCampaign,removeCampaign,syncWishlist,syncPreferences,syncCouponRedemption} from '@/lib/commerce-sync';
 import {shippingProvider} from '@/lib/shipping';
 import {taxProvider} from '@/lib/tax';
 
