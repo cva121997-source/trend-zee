@@ -501,6 +501,7 @@ export async function POST(req:Request){
       const items=await validatedItems(b.items);
       const saved=Array.isArray(b.saved)?b.saved.filter((x:any)=>typeof x==='string').slice(0,100):[];
       await save('cart:'+owner,'cart',owner,{items,saved});
+      if(user)await syncWishlist(owner,saved);
       const lead=await row('lead:'+owner);
       if(lead){
         const old=read(lead);
@@ -542,7 +543,7 @@ export async function POST(req:Request){
 
     if(action==='address'){
       const target=await row(clean(b.id,120));
-      if(b.remove===true){if(!target||target.kind!=='address'||target.owner!==owner)throw new Error('Address not found.');await database().prepare('DELETE FROM records WHERE id=?').bind(target.id).run();return NextResponse.json({ok:true});}
+      if(b.remove===true){if(!target||target.kind!=='address'||target.owner!==owner)throw new Error('Address not found.');await database().prepare('DELETE FROM records WHERE id=?').bind(target.id).run();await database().prepare('DELETE FROM addresses WHERE id=? AND customer_id=?').bind(target.id,owner).run();return NextResponse.json({ok:true});}
       const p=validateProfile(b.address||{});const existing=target?read(target):{};const id=clean(b.id,120)||'address:'+crypto.randomUUID();
       if(b.isDefault===true){const current=await list('address',owner);for(const a of current)await save(a.id,'address',owner,{...a,isDefault:false});}
       await save(id,'address',owner,{...existing,...p,id,label:clean(b.label,60)||'Delivery',isDefault:b.isDefault===true,createdAt:existing.createdAt||new Date().toISOString()});
@@ -555,6 +556,7 @@ export async function POST(req:Request){
       const allowed=(Array.isArray(b.preferredCategories)?b.preferredCategories.map((x:any)=>clean(x,80)).filter(Boolean).slice(0,12):base.preferredCategories||[]);
       const next={...base,emailUpdates:b.emailUpdates!==false,smsUpdates:b.smsUpdates===true,personalized:b.personalized!==false,preferredCategories:allowed,preferredSize:clean(b.preferredSize,40),updatedAt:new Date().toISOString()};
       await save('preferences:'+owner,'preferences',owner,next);
+      if(user)await syncPreferences(owner,next);
       return NextResponse.json({ok:true,preferences:next});
     }
 
