@@ -2,7 +2,7 @@ import {env} from 'cloudflare:workers';
 import {database,digest,secret} from '@/lib/store-server';
 import {sendSms} from '@/lib/notifications';
 
-const cfg=(name:string)=>String((env as any)[name]||process.env[name]||'');
+const cfg=(name:string)=>envValue(name);
 const clean=(v:unknown,max=160)=>String(v??'').trim().slice(0,max);
 const normalizeMobile=(v:string)=>{const x=v.replace(/\s+/g,'');return /^\+?[0-9]{10,13}$/.test(x)?x:''};
 
