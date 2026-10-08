@@ -1,5 +1,5 @@
 export type MotionPreset='none'|'fade'|'slide'|'scale'|'parallax'|'horizontal'|'sticky'|'reveal'|'product-reveal';
-export type HomepageSectionType='hero'|'ticker'|'category-showcase'|'product-carousel'|'product-grid'|'collection-banner'|'full-image'|'editorial'|'testimonials'|'promo'|'newsletter'|'countdown'|'recommendations'|'best-sellers'|'new-arrivals'|'final-cta';
+export type HomepageSectionType='hero'|'ticker'|'category-showcase'|'product-carousel'|'product-grid'|'collection-banner'|'full-image'|'video'|'editorial'|'testimonials'|'promo'|'newsletter'|'countdown'|'recommendations'|'best-sellers'|'new-arrivals'|'final-cta';
 
 export type HomepageSection={
   id:string;
