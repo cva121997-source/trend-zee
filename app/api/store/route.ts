@@ -3,6 +3,8 @@ import {getChatGPTUser} from '@/app/chatgpt-auth';
 import {seedProducts,Product} from '@/lib/catalog';
 import {defaultHomepageSections,defaultCollections,defaultCampaigns,defaultCategories,isScheduleActive,HomepageSection,Collection,Campaign,CategoryContent} from '@/lib/content';
 import {Section,cleanSection,defaultSections,isLive} from '@/lib/home';
+import {quoteShipping} from '@/lib/shipping';
+import {calculateTax} from '@/lib/tax';
 import {database,row,save,list,read,cookie,digest,secret,isAdmin,adminToken,sessionCookie,checkOrigin} from '@/lib/store-server';
 
 export const dynamic='force-dynamic';
@@ -561,15 +563,22 @@ export async function POST(req:Request){
       const pricedItems=items.map((i:any)=>({...i,category:products.find((p:Product)=>p.id===i.productId)?.category||''}));
       const subtotal=pricedItems.reduce((sum:number,i:any)=>sum+i.price*i.quantity,0);
       const discount=await discountFor(b.coupon,subtotal,pricedItems,owner);
-      const total=subtotal-discount.discount;
+      const preShippingTotal=Math.max(0,subtotal-discount.discount);
+      const shippingOptions=quoteShipping(profile.pincode,preShippingTotal);
+      const shippingMethod=shippingOptions.find(x=>x.id===clean(b.shippingId,80))||shippingOptions[0];
+      if(!shippingMethod?.serviceable)throw new Error('No delivery option is available for this PIN code yet.');
+      const shipping=Number(shippingMethod.amount)||0;
+      const taxInfo=calculateTax(preShippingTotal+shipping);
+      const tax=Number(taxInfo.amount)||0;
+      const total=Math.max(0,preShippingTotal+shipping+tax);
       await save('profile:'+owner,'profile',owner,{...profile,verified:!!user,lastLogin:new Date().toISOString()});
       const leadId='lead:'+owner,prior=read(await row(leadId),{});
-      await save(leadId,'lead',owner,{...prior,...profile,items,total,consent:true,consentAt:prior.consentAt||new Date().toISOString(),status:action==='order'?'Submitted':'Checkout started'});
-      if(action==='checkoutStart')return NextResponse.json({ok:true,total,subtotal,discount:discount.discount,coupon:discount.code});
+      await save(leadId,'lead',owner,{...prior,...profile,items,total,subtotal,discount:discount.discount,shipping,shippingMethod:shippingMethod.id,tax,consent:true,consentAt:prior.consentAt||new Date().toISOString(),status:action==='order'?'Submitted':'Checkout started'});
+      if(action==='checkoutStart')return NextResponse.json({ok:true,total,subtotal,discount:discount.discount,shipping,tax,shippingMethod:shippingMethod.id,coupon:discount.code});
       if(!['UPI','Credit card','Debit card'].includes(b.method))throw new Error('Choose a payment method.');
       const id='TZ-'+crypto.randomUUID().slice(0,8).toUpperCase(),now=new Date().toISOString();
       await database().batch([
-        database().prepare('INSERT INTO records (id,kind,owner,data,created,updated) VALUES (?,?,?,?,?,?)').bind(id,'order',owner,JSON.stringify({...profile,items:pricedItems,total,subtotal,discount:discount.discount,coupon:discount.code,note:clean(b.note,1000),method:b.method,status:'Awaiting payment',paymentStatus:'Not paid',courier:'',tracking:''}),now,now),
+        database().prepare('INSERT INTO records (id,kind,owner,data,created,updated) VALUES (?,?,?,?,?,?)').bind(id,'order',owner,JSON.stringify({...profile,items:pricedItems,total,subtotal,discount:discount.discount,shipping,tax,shippingMethod:shippingMethod.id,coupon:discount.code,note:clean(b.note,1000),method:b.method,status:'Awaiting payment',paymentStatus:'Not paid',courier:'',tracking:''}),now,now),
         database().prepare('INSERT INTO records (id,kind,owner,data,created,updated) VALUES (?,?,?,?,?,?)').bind(key,'idempotency',owner,JSON.stringify({id}),now,now),
         database().prepare('UPDATE records SET data=?,updated=? WHERE id=?').bind(JSON.stringify({...c,items:[]}),now,'cart:'+owner),
       ]);
