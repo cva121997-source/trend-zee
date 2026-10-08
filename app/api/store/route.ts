@@ -246,7 +246,7 @@ export async function POST(req:Request){
           if(!normalized.name||!normalized.title||!normalized.desktopImage)throw new Error('A campaign needs a name, title and desktop image.');
           await save(prefix+id,kind,'admin',normalized);
         } else {
-          const normalized:CategoryContent={slug:clean(base.slug,80).toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/(^-|-$)/g,''),title:clean(base.title,120),description:clean(base.description,300),image:clean(base.image,2000),bannerImage:clean(base.bannerImage,2000),visible:base.visible!==false,sortOrder:Math.max(0,Math.round(number(base.sortOrder,100)))};
+          const normalized:CategoryContent={id:clean(base.slug,80),slug:clean(base.slug,80).toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/(^-|-$)/g,''),title:clean(base.title,120),description:clean(base.description,300),image:clean(base.image,2000),bannerImage:clean(base.bannerImage,2000),visible:base.visible!==false,sortOrder:Math.max(0,Math.round(number(base.sortOrder,100)))};
           if(!normalized.slug||!normalized.title||!normalized.image)throw new Error('A category needs a title and image.');
           await save(prefix+normalized.slug,kind,'admin',normalized);
         }
