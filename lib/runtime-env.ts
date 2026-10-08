@@ -1,24 +1,29 @@
-export type RuntimeEnv = Record<string, any>;
+import type {D1Database,R2Bucket} from '@cloudflare/workers-types';
 
-const root = globalThis as typeof globalThis & {
-  __TREND_ZEE_ENV__?: RuntimeEnv;
+export type RuntimeEnv=Record<string,string|D1Database|R2Bucket|undefined>&{
+  DB?:D1Database;
+  BUCKET?:R2Bucket;
+};
+
+const root=globalThis as typeof globalThis & {
+  __TREND_ZEE_ENV__?:RuntimeEnv;
 };
 
 export function setRuntimeEnv(env:unknown){
-  root.__TREND_ZEE_ENV__ = (env && typeof env === 'object') ? env as RuntimeEnv : {};
+  root.__TREND_ZEE_ENV__=(env&&typeof env==='object')?env as RuntimeEnv:{};
 }
 
 export function runtimeEnv():RuntimeEnv{
-  return root.__TREND_ZEE_ENV__ || {};
+  return root.__TREND_ZEE_ENV__||{};
 }
 
 export function envValue(name:string){
   const runtime=runtimeEnv();
   const value=runtime[name];
-  if(value!==undefined && value!==null && String(value)!=='') return String(value);
+  if(value!==undefined&&value!==null&&typeof value!=='object'&&String(value)!=='')return String(value);
   if(typeof process!=='undefined'){
     const processValue=process.env[name];
-    if(processValue!==undefined && processValue!==null) return String(processValue);
+    if(processValue!==undefined&&processValue!==null)return String(processValue);
   }
   return '';
 }
