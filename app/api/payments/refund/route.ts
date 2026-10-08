@@ -3,6 +3,7 @@ import {row,read,save,isAdmin,adminRole,checkOrigin,database} from '@/lib/store-
 import {canAdmin} from '@/lib/roles';
 import {paymentProvider,refundRazorpay} from '@/lib/payments';
 import {recordAnalyticsEvent} from '@/lib/analytics';
+import {syncOrder,syncReturnCase} from '@/lib/commerce-sync';
 
 export const dynamic='force-dynamic';
 
@@ -37,6 +38,8 @@ export async function POST(req:Request){
     const nextOrder={...order,paymentStatus:full?'Refunded':'Paid',refundId:full?refundId:order.refundId||'',refundedAt:full?now:order.refundedAt||''};
     await save(r.id,'return',r.owner,nextReturn);
     await save(order.id,'order',orderRow.owner,nextOrder);
+    await syncReturnCase({...nextReturn,id:r.id,owner:r.owner});
+    await syncOrder(order.id,orderRow.owner,nextOrder);
     if(payment)await database().prepare('UPDATE payments SET status=?,updated_at=? WHERE id=?').bind(full?'refunded':'partially_refunded',now,payment.id).run();
     await recordAnalyticsEvent({anonymousId:'admin',customerId:orderRow.owner,eventName:'refund_processed',orderId:order.id,value:amount,metadata:{returnId,provider}});
     await save('audit:'+crypto.randomUUID(),'audit','admin',{action:'Refund processed',entity:returnId,actor:'Admin',details:{orderId:order.id,amount,provider,refundId},at:now});
