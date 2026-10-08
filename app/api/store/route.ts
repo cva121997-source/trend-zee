@@ -624,11 +624,11 @@ export async function POST(req:Request){
       const subtotal=pricedItems.reduce((sum:number,i:any)=>sum+i.price*i.quantity,0);
       const discount=await discountFor(b.coupon,subtotal,pricedItems,owner);
       const preShippingTotal=Math.max(0,subtotal-discount.discount);
-      const shippingOptions=quoteShipping(profile.pincode,preShippingTotal);
+      const shippingOptions=await quoteShipping(profile.pincode,preShippingTotal);
       const shippingMethod=shippingOptions.find(x=>x.id===clean(b.shippingId,80))||shippingOptions[0];
       if(!shippingMethod?.serviceable)throw new Error('No delivery option is available for this PIN code yet.');
       const shipping=Number(shippingMethod.amount)||0;
-      const taxInfo=calculateTax(preShippingTotal+shipping);
+      const taxInfo=await calculateTax(preShippingTotal+shipping,{pincode:profile.pincode,city:profile.city});
       const tax=Number(taxInfo.amount)||0;
       const total=Math.max(0,preShippingTotal+shipping+tax);
       await save('profile:'+owner,'profile',owner,{...profile,verified:!!user,lastLogin:new Date().toISOString()});
