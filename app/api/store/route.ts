@@ -41,7 +41,10 @@ async function catalog():Promise<Product[]>{
       db.prepare('INSERT OR IGNORE INTO records (id,kind,owner,data,created,updated) VALUES (?,?,?,?,?,?)').bind('catalog-initialized','system','system','{}',now,now),
     ]);
   }
-  return (await db.prepare('SELECT data FROM products WHERE archived=0').all<{data:string}>()).results.map(r=>JSON.parse(r.data));
+  const products=(await db.prepare('SELECT data FROM products WHERE archived=0').all<{data:string}>()).results.map(r=>JSON.parse(r.data));
+  const variantCount=await db.prepare('SELECT COUNT(*) AS count FROM product_variants').first<any>().catch(()=>null);
+  if(Number(variantCount?.count||0)===0){for(const product of products)if(product.variantStock&&typeof product.variantStock==='object')await syncProductVariants(product);}
+  return products;
 }
 async function archivedCatalog():Promise<Product[]>{
   await catalog();
@@ -54,7 +57,16 @@ async function ensureContent<T extends {id:string}>(kind:string,prefix:string,de
     const id=prefix+item.id;
     if(!await row(id))await save(id,kind,'admin',item);
   }
-  return list(kind);
+  const rows=await list(kind);
+  for(const item of rows){
+    try{
+      if(kind==='homepage_section')await syncHomepageSection(item);
+      else if(kind==='collection')await syncCollection(item);
+      else if(kind==='campaign')await syncCampaign(item);
+      else if(kind==='category')await syncCategory(item);
+    }catch(e){console.error('normalized content sync',kind,item.id,e);}
+  }
+  return rows;
 }
 async function contentData(){
   const [homepageSections,collections,campaigns,categories]=await Promise.all([
