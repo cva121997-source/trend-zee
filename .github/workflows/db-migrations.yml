@@ -1,0 +1,25 @@
+name: Trend-Zee D1 migrations
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+
+jobs:
+  migrate:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    env:
+      D1_DATABASE_NAME: ${{ secrets.TREND_ZEE_D1_DATABASE_NAME }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - name: Apply D1 migrations
+        run: node scripts/apply-d1-migrations.mjs
