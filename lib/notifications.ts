@@ -1,6 +1,6 @@
 import {env} from 'cloudflare:workers';
 
-const value=(name:string)=>String((env as any)[name]||process.env[name]||'');
+const value=(name:string)=>envValue(name);
 const clean=(v:unknown,max=500)=>String(v??'').trim().slice(0,max);
 const htmlEscape=(v:unknown)=>clean(v,500).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
 
