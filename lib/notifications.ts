@@ -2,6 +2,7 @@ import {env} from 'cloudflare:workers';
 
 const value=(name:string)=>String((env as any)[name]||process.env[name]||'');
 const clean=(v:unknown,max=500)=>String(v??'').trim().slice(0,max);
+const htmlEscape=(v:unknown)=>clean(v,500).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
 
 export type NotificationProvider='preview'|'resend'|'twilio'|'webhook';
 
@@ -48,7 +49,7 @@ export async function sendSms(to:string,message:string){
 export async function notifyOrderEvent(order:any,event:string){
   const subject=event==='paid'?'Trend-Zee payment confirmed':event==='shipped'?'Trend-Zee order dispatched':event==='delivered'?'Trend-Zee order delivered':`Trend-Zee order update · ${event}`;
   const name=clean(order.name||'there',100);
-  const html=`<div style="font-family:Arial,sans-serif"><h2>TREND ZEE</h2><p>Hi ${name},</p><p>Your order <strong>${clean(order.id,80)}</strong> is now <strong>${clean(event,80)}</strong>.</p><p>Total: INR ${Math.round(Number(order.total||0)).toLocaleString('en-IN')}</p></div>`;
+  const safeName=htmlEscape(name),safeId=htmlEscape(order.id),safeEvent=htmlEscape(event);const html=`<div style="font-family:Arial,sans-serif"><h2>TREND ZEE</h2><p>Hi ${safeName},</p><p>Your order <strong>${safeId}</strong> is now <strong>${safeEvent}</strong>.</p><p>Total: INR ${Math.round(Number(order.total||0)).toLocaleString('en-IN')}</p></div>`;
   const results:{email?:string;sms?:string}={};
   try{if(order.email){const r=await sendTransactionalEmail(order.email,subject,html);results.email=r.provider;}}catch(e){console.error('email notification',e);}
   try{if(order.mobile){const r=await sendSms(order.mobile,`Trend-Zee: order ${clean(order.id,40)} is ${clean(event,40)}. Total INR ${Math.round(Number(order.total||0))}.`);results.sms=r.provider;}}catch(e){console.error('sms notification',e);}
