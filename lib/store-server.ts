@@ -9,15 +9,15 @@ type PreparedLike={
 type DatabaseLike={prepare(sql:string):PreparedLike;batch(statements:PreparedLike[]):Promise<any>};
 
 function normalizeSql(sql:string){
-  let q=sql.trim().replace(/;[\\s]*$/,'');
-  if(/INSERT\\s+OR\\s+IGNORE\\s+INTO/i.test(q)&&!/ON\\s+CONFLICT/i.test(q)){
+  let q=sql.trim().replace(/;\s*$/,'');
+  if(/INSERT\s+OR\s+IGNORE\s+INTO/i.test(q)&&!/ON\\s+CONFLICT/i.test(q)){
     q=q.replace(/INSERT\\s+OR\\s+IGNORE\\s+INTO/i,'INSERT INTO')+' ON CONFLICT DO NOTHING';
   }
   return q;
 }
 
 async function supabaseSql(sql:string,params:unknown[]){
-  const url=(envValue('SUPABASE_URL')||'https://hzlsjwcqdhdckftisgso.supabase.co').replace(/\\/$/,'');
+  const url=(envValue('SUPABASE_URL')||'https://hzlsjwcqdhdckftisgso.supabase.co').replace(/\/$/,'');
   const key=envValue('SUPABASE_SERVICE_ROLE_KEY');
   if(!key)throw new Error('Supabase storage is not configured. Add SUPABASE_SERVICE_ROLE_KEY to Vercel.');
   const response=await fetch(url+'/rest/v1/rpc/trend_zee_sql',{
