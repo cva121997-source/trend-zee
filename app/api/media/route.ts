@@ -1,7 +1,6 @@
 import {runtimeEnv} from '@/lib/runtime-env';
 import {runtimeEnv} from '@/lib/runtime-env';
 import {NextResponse} from 'next/server';
-const env=runtimeEnv();
 import {adminRole,checkOrigin,isAdmin} from '@/lib/store-server';
 import {canAdmin} from '@/lib/roles';
 
@@ -12,6 +11,7 @@ async function authorize(req:Request){
 }
 
 export async function GET(req:Request){
+  const env=runtimeEnv();
   const role=await authorize(req);if(!role)return NextResponse.json({error:'Content admin access required.'},{status:403});
   if(!env.BUCKET)return NextResponse.json({items:[]});
   const result=await env.BUCKET.list({limit:1000});
@@ -20,6 +20,7 @@ export async function GET(req:Request){
 
 export async function DELETE(req:Request){
   try{
+    const env=runtimeEnv();
     checkOrigin(req);const role=await authorize(req);if(!role)return NextResponse.json({error:'Content admin access required.'},{status:403});
     if(!env.BUCKET)return NextResponse.json({error:'Media storage is unavailable.'},{status:503});
     const body:any=await req.json();const id=String(body.id||'').trim();if(!/^[a-f0-9-]{36}$/.test(id))throw new Error('Invalid media reference.');
