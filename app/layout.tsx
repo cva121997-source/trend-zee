@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import AnalyticsBeacon from "@/components/analytics-beacon";
 
 export const metadata:Metadata={
   title:"Trend-Zee — Discover What's Next",
@@ -16,5 +17,5 @@ export const metadata:Metadata={
 const organization={"@context":"https://schema.org","@type":"Organization","name":"Trend-Zee","url":"https://trend-zee.vercel.app/","logo":"https://trend-zee.vercel.app/favicon.svg"};
 
 export default function RootLayout({children}:{children:React.ReactNode}){
- return <html lang="en"><body className="antialiased"><script type="application/ld+json" dangerouslySetInnerHTML={{__html:JSON.stringify(organization)}}/>{children}</body></html>;
+ return <html lang="en"><body className="antialiased"><AnalyticsBeacon/><script type="application/ld+json" dangerouslySetInnerHTML={{__html:JSON.stringify(organization)}}/>{children}</body></html>;
 }
