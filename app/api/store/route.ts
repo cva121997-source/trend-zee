@@ -1,6 +1,7 @@
 import {NextResponse} from 'next/server';
 import {getChatGPTUser} from '@/app/chatgpt-auth';
 import {seedProducts,Product} from '@/lib/catalog';
+import {defaultHomepageSections,defaultCollections,defaultCampaigns,defaultCategories,isScheduleActive,HomepageSection,Collection,Campaign,CategoryContent} from '@/lib/content';
 import {database,row,save,list,read,cookie,digest,secret,isAdmin,adminToken,sessionCookie,checkOrigin} from '@/lib/store-server';
 
 export const dynamic='force-dynamic';
@@ -17,6 +18,8 @@ const defaultSettings={
   shippingNote:'Delivery availability, charges and ETA are confirmed before a paid order is accepted.',
   taxNote:'Applicable taxes will be shown once tax rules are configured.',
   storeStatus:'Preview',
+  brandTagline:'Wear your next chapter.',
+  freeShippingThreshold:1999,
 };
 
 async function catalog():Promise<Product[]>{
@@ -35,6 +38,36 @@ async function archivedCatalog():Promise<Product[]>{
   return (await database().prepare('SELECT data FROM products WHERE archived=1').all<{data:string}>()).results.map(r=>JSON.parse(r.data));
 }
 
+
+async function ensureContent<T extends {id:string}>(kind:string,prefix:string,defaults:T[]){
+  for(const item of defaults){
+    const id=prefix+item.id;
+    if(!await row(id))await save(id,kind,'admin',item);
+  }
+  return list(kind);
+}
+async function contentData(){
+  const [homepageSections,collections,campaigns,categories]=await Promise.all([
+    ensureContent<HomepageSection>('homepage_section','homepage:',defaultHomepageSections),
+    ensureContent<Collection>('collection','collection:',defaultCollections),
+    ensureContent<Campaign>('campaign','campaign:',defaultCampaigns),
+    ensureContent<CategoryContent>('category','category:',defaultCategories),
+  ]);
+  return {
+    homepageSections:homepageSections.sort((a:any,b:any)=>number(a.sortOrder)-number(b.sortOrder)),
+    collections:collections.sort((a:any,b:any)=>number(a.sortOrder)-number(b.sortOrder)),
+    campaigns,
+    categories:categories.sort((a:any,b:any)=>number(a.sortOrder)-number(b.sortOrder)),
+  };
+}
+function publicContent(data:any){
+  return {
+    homepageSections:(data.homepageSections||[]).filter((s:any)=>s.visible!==false&&isScheduleActive(s.scheduleStart||'',s.scheduleEnd||'')),
+    collections:(data.collections||[]).filter((s:any)=>s.visible!==false&&isScheduleActive(s.scheduleStart||'',s.scheduleEnd||'')),
+    campaigns:(data.campaigns||[]).filter((s:any)=>(s.status==='live'||(s.status==='scheduled'&&isScheduleActive(s.startDate||'',s.endDate||''))))),
+    categories:(data.categories||[]).filter((s:any)=>s.visible!==false),
+  };
+}
 
 async function identity(req:Request){
   const user=await getChatGPTUser();
@@ -79,17 +112,24 @@ async function discountFor(value:any,subtotal:number){
   const c=read(await row('coupon:'+code));
   if(!c||!c.active||c.expires<new Date().toISOString().slice(0,10))throw new Error('This coupon is unavailable or has expired.');
   if(subtotal<c.minOrder)throw new Error('This coupon needs a minimum order of INR '+c.minOrder);
-  return {code,discount:Math.round(subtotal*c.percent/100)};
+  const raw=Math.round(subtotal*c.percent/100),discount=c.maxDiscount>0?Math.min(raw,c.maxDiscount):raw;
+  return {code,discount};
 }
 
 export async function GET(req:Request){
   try{
-    if(new URL(req.url).searchParams.get('view')==='admin'){
+    const view=new URL(req.url).searchParams.get('view');
+    if(view==='content-admin'){
       if(!await isAdmin(req))return NextResponse.json({error:'Please sign in as admin.'},{status:401});
+      return NextResponse.json(await contentData(),{headers:{'Cache-Control':'no-store'}});
+    }
+    if(view==='admin'){
+      if(!await isAdmin(req))return NextResponse.json({error:'Please sign in as admin.'},{status:401});
+      const commerceContent=await contentData();
       return NextResponse.json({
         products:await catalog(),archivedProducts:await archivedCatalog(),orders:await list('order'),customers:await list('profile'),leads:await list('lead'),
         feedback:await list('feedback'),coupons:await list('coupon'),returns:await list('return'),support:await list('support'),
-        reviews:await list('review'),inventory:await list('inventory'),audit:await list('audit'),settings:await settings(),
+        reviews:await list('review'),inventory:await list('inventory'),audit:await list('audit'),settings:await settings(),content:commerceContent,
       },{headers:{'Cache-Control':'no-store'}});
     }
 
@@ -100,8 +140,10 @@ export async function GET(req:Request){
       await save('profile:'+owner,'profile',owner,profile);
     }
     const reviews=(await list('review')).filter((r:any)=>r.status==='Published').map((r:any)=>({productId:r.productId,rating:r.rating,title:r.title,message:r.message,name:r.name,created:r.created}));
+    const commerceContent=publicContent(await contentData());
     const result=NextResponse.json({
       products:await catalog(),
+      content:commerceContent,
       user:user||(profile?.mobile?{userId:owner,email:profile.email||'',displayName:profile.name||'Guest',guest:true}:null),
       profile,cart:await cart(owner),orders:(user||profile?.mobile)?await list('order',owner):[],
       support:(user||profile?.mobile)?await list('support',owner):[],returns:(user||profile?.mobile)?await list('return',owner):[],reviews,settings:await settings(),
@@ -147,13 +189,47 @@ export async function POST(req:Request){
     if(action.startsWith('admin')){
       if(!await isAdmin(req))return NextResponse.json({error:'Please sign in as admin.'},{status:401});
 
+      if(action==='adminContent'){
+        const kind=clean(b.kind,40);
+        const incoming=b.record||{};
+        const prefix=kind==='homepage_section'?'homepage:':kind==='collection'?'collection:':kind==='campaign'?'campaign:':kind==='category'?'category:':'';
+        if(!prefix)throw new Error('Unsupported content type.');
+        const id=clean(incoming.id,120)||crypto.randomUUID();
+        if(b.remove===true){
+          await database().prepare('DELETE FROM records WHERE id=? AND kind=?').bind(prefix+id,kind).run();
+          await audit('Content removed',id,{kind});
+          return NextResponse.json({ok:true,id});
+        }
+        const now=new Date().toISOString();
+        const base={...incoming,id};
+        if(kind==='homepage_section'){
+          const normalized:HomepageSection={id,type:['hero','ticker','category-showcase','product-carousel','product-grid','collection-banner','full-image','video','editorial','testimonials','promo','newsletter','countdown','recommendations','best-sellers','new-arrivals','final-cta'].includes(base.type)?base.type:'product-carousel',kicker:clean(base.kicker,80),title:clean(base.title,160),description:clean(base.description,500),ctaLabel:clean(base.ctaLabel,60),ctaHref:clean(base.ctaHref,200),secondaryCtaLabel:clean(base.secondaryCtaLabel,60),secondaryCtaHref:clean(base.secondaryCtaHref,200),image:clean(base.image,2000),mobileImage:clean(base.mobileImage,2000),category:clean(base.category,80)||'All',collectionId:clean(base.collectionId,120),productIds:Array.isArray(base.productIds)?base.productIds.map((x:any)=>clean(x,120)).filter(Boolean).slice(0,40):[],theme:['paper','ink','forest','sand','white'].includes(base.theme)?base.theme:'paper',layout:['standard','split','immersive','sticky','marquee','grid'].includes(base.layout)?base.layout:'standard',motion:['none','fade','slide','scale','parallax','horizontal','sticky','reveal','product-reveal'].includes(base.motion)?base.motion:'fade',visible:base.visible!==false,sortOrder:Math.max(0,Math.round(number(base.sortOrder,100))),scheduleStart:clean(base.scheduleStart,40),scheduleEnd:clean(base.scheduleEnd,40)};
+          if(!normalized.title)throw new Error('Give the homepage section a title.');
+          await save(prefix+id,kind,'admin',normalized);
+        } else if(kind==='collection'){
+          const normalized:Collection={id,title:clean(base.title,160),description:clean(base.description,500),coverImage:clean(base.coverImage,2000),productIds:Array.isArray(base.productIds)?base.productIds.map((x:any)=>clean(x,120)).filter(Boolean).slice(0,60):[],layout:['editorial','grid','split'].includes(base.layout)?base.layout:'grid',visible:base.visible!==false,sortOrder:Math.max(0,Math.round(number(base.sortOrder,100))),scheduleStart:clean(base.scheduleStart,40),scheduleEnd:clean(base.scheduleEnd,40)};
+          if(!normalized.title||!normalized.coverImage)throw new Error('A collection needs a title and cover image.');
+          await save(prefix+id,kind,'admin',normalized);
+        } else if(kind==='campaign'){
+          const normalized:Campaign={id,name:clean(base.name,120),title:clean(base.title,160),description:clean(base.description,500),desktopImage:clean(base.desktopImage,2000),mobileImage:clean(base.mobileImage,2000),ctaLabel:clean(base.ctaLabel,60),ctaHref:clean(base.ctaHref,200),productIds:Array.isArray(base.productIds)?base.productIds.map((x:any)=>clean(x,120)).filter(Boolean).slice(0,60):[],category:clean(base.category,80)||'All',discountLabel:clean(base.discountLabel,80),startDate:clean(base.startDate,40),endDate:clean(base.endDate,40),status:['draft','scheduled','live','ended'].includes(base.status)?base.status:'draft'};
+          if(!normalized.name||!normalized.title||!normalized.desktopImage)throw new Error('A campaign needs a name, title and desktop image.');
+          await save(prefix+id,kind,'admin',normalized);
+        } else {
+          const normalized:CategoryContent={slug:clean(base.slug,80).toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/(^-|-$)/g,''),title:clean(base.title,120),description:clean(base.description,300),image:clean(base.image,2000),bannerImage:clean(base.bannerImage,2000),visible:base.visible!==false,sortOrder:Math.max(0,Math.round(number(base.sortOrder,100)))};
+          if(!normalized.slug||!normalized.title||!normalized.image)throw new Error('A category needs a title and image.');
+          await save(prefix+normalized.slug,kind,'admin',normalized);
+        }
+        await audit('Content saved',prefix+id,{kind});
+        return NextResponse.json({ok:true,id});
+      }
+
       if(action==='adminCoupon'){
         const c=b.coupon||{};
         const code=clean(c.code,30).toUpperCase();
         const percent=number(c.percent,-1),minOrder=number(c.minOrder,-1);
-        const expires=clean(c.expires,10);
-        if(!/^[A-Z0-9_-]{3,30}$/.test(code)||percent<1||percent>80||minOrder<0||!/^\d{4}-\d{2}-\d{2}$/.test(expires)||expires<new Date().toISOString().slice(0,10))throw new Error('Check coupon code, discount (1-80%), minimum order and a valid future expiry.');
-        await save('coupon:'+code,'coupon','admin',{code,percent,minOrder,expires,active:!!c.active});
+        const expires=clean(c.expires,10),maxDiscount=Math.max(0,number(c.maxDiscount,0)),productIds=Array.isArray(c.productIds)?c.productIds.map((x:any)=>clean(x,120)).filter(Boolean).slice(0,50):[],categories=Array.isArray(c.categories)?c.categories.map((x:any)=>clean(x,80)).filter(Boolean).slice(0,20):[];
+        if(!/^[A-Z0-9_-]{3,30}$/.test(code)||percent<1||percent>80||minOrder<0||!/^\d{4}-\d{2}-\d{2}$/.test(expires)||expires<new Date().toISOString().slice(0,10)||maxDiscount<0)throw new Error('Check coupon code, discount (1-80%), minimum order, cap and a valid future expiry.');
+        await save('coupon:'+code,'coupon','admin',{code,percent,minOrder,maxDiscount,productIds,categories,expires,active:!!c.active});
         await audit('Promotion saved',code,{percent,minOrder,active:!!c.active});
         return NextResponse.json({ok:true});
       }
@@ -162,9 +238,11 @@ export async function POST(req:Request){
         const p=b.product||{};
         const data:Product={
           id:clean(p.id)||crypto.randomUUID(),name:clean(p.name),category:clean(p.category),type:clean(p.type),brand:clean(p.brand),
-          price:Number(p.price),stock:Number(p.stock),colors:p.colors?.map((x:any)=>clean(x)).filter(Boolean),sizes:p.sizes?.map((x:any)=>clean(x)).filter(Boolean),
-          images:p.images?.map((x:any)=>clean(x,2000)).filter(Boolean),description:clean(p.description,2000),specifications:clean(p.specifications,2000),tag:clean(p.tag),
+          price:Number(p.price),mrp:Number(p.mrp)>0?Number(p.mrp):undefined,sku:clean(p.sku,80),stock:Number(p.stock),colors:p.colors?.map((x:any)=>clean(x)).filter(Boolean),sizes:p.sizes?.map((x:any)=>clean(x)).filter(Boolean),
+          images:p.images?.map((x:any)=>clean(x,2000)).filter(Boolean),hoverImage:clean(p.hoverImage,2000)||undefined,video:clean(p.video,2000)||undefined,badge:clean(p.badge,80)||undefined,tags:Array.isArray(p.tags)?p.tags.map((x:any)=>clean(x,60)).filter(Boolean).slice(0,20):[],
+          rating:Number(p.rating)||undefined,reviewCount:Number(p.reviewCount)||undefined,description:clean(p.description,2000),specifications:clean(p.specifications,2000),material:clean(p.material,300),care:clean(p.care,500),shipping:clean(p.shipping,500),returnPolicy:clean(p.returnPolicy,500),seoTitle:clean(p.seoTitle,160),seoDescription:clean(p.seoDescription,320),tag:clean(p.tag),
         };
+        if(data.mrp&&data.mrp<data.price)throw new Error('MRP must be greater than or equal to the selling price.');
         if(!data.name||!data.category||!data.type||!data.brand||!Number.isFinite(data.price)||data.price<1||data.price>1000000||!Number.isInteger(data.stock)||data.stock<0||!data.colors?.length||!data.sizes?.length||!data.images?.length||data.images.length>5||!data.images.every(x=>x.startsWith('/images/')||x.startsWith('/api/image/')||/^https:\/\//.test(x)))throw new Error('Check product name, category, type, brand, price, stock, variants and 1-5 image URLs.');
         const previous=await database().prepare('SELECT data FROM products WHERE id=?').bind(data.id).first<{data:string}>();
         const oldProduct=previous?JSON.parse(previous.data):null;
@@ -215,7 +293,7 @@ export async function POST(req:Request){
         const current=await settings();
         const next={
           ...current,
-          announcement:clean(b.settings?.announcement,180),supportEmail:clean(b.settings?.supportEmail,200),supportPhone:clean(b.settings?.supportPhone,40),
+          announcement:clean(b.settings?.announcement,180),brandTagline:clean(b.settings?.brandTagline,180),freeShippingThreshold:Math.max(0,Math.round(number(b.settings?.freeShippingThreshold,current.freeShippingThreshold||1999))),supportEmail:clean(b.settings?.supportEmail,200),supportPhone:clean(b.settings?.supportPhone,40),
           supportHours:clean(b.settings?.supportHours,120),returnsWindowDays:Math.max(0,Math.min(60,Math.round(number(b.settings?.returnsWindowDays,current.returnsWindowDays)))),
           lowStockThreshold:Math.max(0,Math.min(1000,Math.round(number(b.settings?.lowStockThreshold,current.lowStockThreshold)))),
           shippingNote:clean(b.settings?.shippingNote,500),taxNote:clean(b.settings?.taxNote,500),storeStatus:['Preview','Live','Maintenance'].includes(b.settings?.storeStatus)?b.settings.storeStatus:current.storeStatus,
