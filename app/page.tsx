@@ -11,6 +11,8 @@ import {Tabs,TabsContent,TabsList,TabsTrigger} from '@/components/ui/tabs';
 import {Toaster,toast} from 'sonner';
 import {Product,money} from '@/lib/catalog';
 import {api} from '@/lib/client';
+import HomeSections from '@/components/home-sections';
+import type {Section} from '@/lib/home';
 
 type Item={productId:string;quantity:number;size:string;color:string;name?:string;price?:number;image?:string};
 type StoreSettings={announcement:string;supportEmail:string;supportPhone:string;supportHours:string;returnsWindowDays:number;shippingNote:string;taxNote:string;storeStatus:string;freeShippingThreshold:number};
@@ -19,6 +21,9 @@ const blankSettings:StoreSettings={announcement:'Thoughtful essentials for every
 
 export default function Store(){
   const [products,setProducts]=useState<Product[]>([]);
+  const [home,setHome]=useState<Section[]>([]);
+  const [campaigns,setCampaigns]=useState<any[]>([]);
+  const [contentCollections,setContentCollections]=useState<any[]>([]);
   const [loading,setLoading]=useState(true);
   const [error,setError]=useState('');
   const [user,setUser]=useState<any>(null);
@@ -67,6 +72,9 @@ export default function Store(){
       const data:any=await response.json();
       if(!response.ok)throw new Error(data.error);
       setProducts(data.products||[]);
+      setHome(data.home||[]);
+      setCampaigns(data.content?.campaigns||[]);
+      setContentCollections(data.content?.collections||[]);
       setUser(data.user||null);
       setProfile(data.profile||blankProfile);
       setOrders(data.orders||[]);
@@ -129,6 +137,12 @@ export default function Store(){
     setCategory(cat);setPanel('');document.getElementById('collection')?.scrollIntoView({behavior:'smooth'});
   }
 
+  function homeLink(href:string):boolean{
+    if(href.startsWith('/?category=')){browse(decodeURIComponent(href.slice('/?category='.length)));return true;}
+    if(href.startsWith('#')){const el=document.getElementById(href.slice(1));if(!el)return false;el.scrollIntoView({behavior:window.matchMedia('(prefers-reduced-motion: reduce)').matches?'auto':'smooth'});return true;}
+    return false;
+  }
+
   const count=cart.items.reduce((sum,item)=>sum+item.quantity,0);
   const total=cart.items.reduce((sum,item)=>sum+(products.find(p=>p.id===item.productId)?.price||item.price||0)*item.quantity,0);
   const filtered=useMemo(()=>{
@@ -187,7 +201,7 @@ export default function Store(){
     <div className="announcement">{settings.storeStatus==='Maintenance'?'Store maintenance mode · Browsing remains available':settings.announcement}</div>
     <header className="store-header">
       <button className="logo" onClick={()=>window.scrollTo({top:0,behavior:'smooth'})}>TREND ZEE<sup>®</sup></button>
-      <nav className="desktop-nav"><button onClick={()=>browse('All')}>Shop</button><button onClick={()=>browse('Clothing')}>Clothing</button><button onClick={()=>browse('Bags')}>Bags</button><button onClick={()=>setPanel('support')}>Help</button></nav>
+      <nav className="desktop-nav"><button onClick={()=>browse('All')}>Shop</button>{availableCategories.filter(c=>c!=='All').slice(0,3).map(c=><button key={c} onClick={()=>browse(c)}>{c}</button>)}<button onClick={()=>setPanel('support')}>Help</button></nav>
       <div className="header-actions">
         <button aria-label="Search products" onClick={()=>location.href='/search'}><Search size={19}/></button>
         <button aria-label="Saved items" onClick={()=>setPanel('saved')}><Heart size={19}/><span>{cart.saved.length||''}</span></button>
@@ -200,27 +214,14 @@ export default function Store(){
     {error&&<div className="store-error"><b>We could not refresh the store.</b><span>{error}</span><button onClick={()=>load()}>Try again</button></div>}
 
     <main>
-      <section className="hero">
-        <div className="hero-copy">
-          <span className="eyebrow"><i className="tiny-rule"/>NEW CHAPTER · EVERYDAY EDIT</span>
-          <h1>Wear your<br/><em>next chapter.</em></h1>
-          <p>Clothing, bags and footwear chosen for the different versions of your day. Browse freely, save favourites, and build your bag before sharing any contact details.</p>
-          <button className="button" onClick={()=>browse('All')}>Explore the collection <ChevronRight size={16}/></button>
-          <div className="hero-foot">DESIGNED FOR THE DAYS THAT KEEP MOVING</div>
-        </div>
-        <div className="hero-image"><img src="/images/hero.jpg" alt="TREND ZEE everyday style collection"/><div className="hero-sticker">MADE FOR<br/><i>what’s next</i></div><span className="image-caption">TREND ZEE · EVERYDAY STORIES</span></div>
-      </section>
-
-      <div className="ticker"><span>SHOP YOUR WAY</span><span className="star">✦</span><span>SAVE YOUR FAVOURITES</span><span className="star">✦</span><span>TRACK EVERY ORDER</span><span className="star">✦</span><span>SUPPORT WHEN YOU NEED IT</span></div>
-
-      <section className="commerce-promises">
-        <div><ShieldCheck/><span><b>Clear order status</b><small>Paid revenue is never confused with unpaid requests.</small></span></div>
-        <div><Truck/><span><b>Delivery visibility</b><small>Courier and tracking appear when fulfilment is connected.</small></span></div>
-        <div><RotateCcw/><span><b>Return-ready account</b><small>{settings.returnsWindowDays}-day return workflow for eligible delivered paid orders.</small></span></div>
-        <div><Headphones/><span><b>Built-in support</b><small>{settings.supportHours||'Support hours available in your account.'}</small></span></div>
-      </section>
-
-      <section className="collection" id="collection">
+      {home.length ? <HomeSections sections={home} products={products} renderProduct={productCard} onNavigate={homeLink}/> : <>
+        <section className="hero"><div className="hero-copy"><span className="eyebrow"><i className="tiny-rule"/>NEW CHAPTER · EVERYDAY EDIT</span><h1>Wear your<br/><em>next chapter.</em></h1><p>Clothing, bags and footwear chosen for the different versions of your day. Browse freely, save favourites, and build your bag before sharing any contact details.</p><button className="button" onClick={()=>browse('All')}>Explore the collection <ChevronRight size={16}/></button><div className="hero-foot">DESIGNED FOR THE DAYS THAT KEEP MOVING</div></div><div className="hero-image"><img src="/images/hero.jpg" alt="TREND ZEE everyday style collection"/><div className="hero-sticker">MADE FOR<br/><i>what’s next</i></div><span className="image-caption">TREND ZEE · EVERYDAY STORIES</span></div></section>
+        <div className="ticker"><span>SHOP YOUR WAY</span><span className="star">✦</span><span>SAVE YOUR FAVOURITES</span><span className="star">✦</span><span>TRACK EVERY ORDER</span><span className="star">✦</span><span>SUPPORT WHEN YOU NEED IT</span></div>
+        <section className="commerce-promises"><div><ShieldCheck/><span><b>Clear order status</b><small>Paid revenue is never confused with unpaid requests.</small></span></div><div><Truck/><span><b>Delivery visibility</b><small>Courier and tracking appear when fulfilment is connected.</small></span></div><div><RotateCcw/><span><b>Return-ready account</b><small>{settings.returnsWindowDays}-day return workflow for eligible delivered paid orders.</small></span></div><div><Headphones/><span><b>Built-in support</b><small>{settings.supportHours||'Support hours available in your account.'}</small></span></div></section>
+      </>}
+      <div id="sections-start" aria-hidden="true" className="sr-only">Trend-Zee shopping story</div>
+      {campaigns.length>0&&<section className="campaign-live-bar"><div>{campaigns[0].discountLabel&&<span className="eyebrow">{campaigns[0].discountLabel}</span>}<strong>{campaigns[0].title}</strong><small>{campaigns[0].description}</small></div><a className="button compact" href={campaigns[0].ctaHref||'#collection'} onClick={e=>{if(homeLink(campaigns[0].ctaHref||'#collection'))e.preventDefault()}}>{campaigns[0].ctaLabel||'Shop now'} <ChevronRight size={15}/></a></section>}
+            <section className="collection" id="collection">
         <div className="section-heading"><div><span className="eyebrow">THE COLLECTION</span><h2>Find your everyday favourites.</h2></div><span>{filtered.length} of {products.length} pieces</span></div>
         <div className="filters">
           <div className="category-list">{availableCategories.map(c=><button key={c} className={category===c?'active':''} onClick={()=>setCategory(c)}>{c}</button>)}</div>
@@ -236,6 +237,8 @@ export default function Store(){
       </section>
 
       {recent.length>0&&<section className="recent-section"><div className="section-heading"><div><span className="eyebrow">RECENTLY VIEWED</span><h2>Pick up where you left off.</h2></div><button className="text-button" onClick={()=>{setRecentIds([]);localStorage.removeItem('tz_recent');}}>Clear history</button></div><div className="recent-row">{recent.map(p=><button key={p.id} onClick={()=>show(p)}><img src={p.images[0]} alt={p.name}/><span><b>{p.name}</b><small>{money(p.price)}</small></span></button>)}</div></section>}
+
+      {contentCollections.length>0&&<section className="content-collections"><div className="section-heading"><div><span className="eyebrow">CURATED COLLECTIONS</span><h2>Shop the story.</h2></div><span>{contentCollections.length} edits</span></div><div className="content-collection-grid">{contentCollections.slice(0,4).map((col:any)=><a href={'/collection/'+col.id} key={col.id}><img src={col.coverImage} alt={col.title}/><div><span className="eyebrow">THE EDIT</span><h3>{col.title}</h3><p>{col.description}</p><b>Explore <ChevronRight size={14}/></b></div></a>)}</div></section>}
 
       <section className="story"><span className="eyebrow">BUILT AROUND THE CUSTOMER</span><h2>Less friction. More confidence.</h2><p>Explore before signing in, keep favourites and your bag together, see honest payment and fulfilment states, and reach support from the same account where your orders live.</p><div className="story-actions"><button className="button light" onClick={()=>browse('All')}>Shop now</button><button className="text-button light-text" onClick={()=>setPanel('support')}>Customer support</button></div></section>
     </main>
