@@ -1,5 +1,7 @@
 import {runtimeEnv} from '@/lib/runtime-env';
+import {runtimeEnv} from '@/lib/runtime-env';
 import {NextResponse} from 'next/server';
+const env=runtimeEnv();
 import {adminRole,checkOrigin,isAdmin} from '@/lib/store-server';
 import {canAdmin} from '@/lib/roles';
 
