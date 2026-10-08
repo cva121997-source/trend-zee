@@ -177,7 +177,7 @@ export async function GET(req:Request){
       user:user||(profile?.mobile?{userId:owner,email:profile.email||'',displayName:profile.name||'Guest',guest:true}:null),
       profile,cart:await cart(owner),orders:(user||profile?.mobile)?await list('order',owner):[],
       support:(user||profile?.mobile)?await list('support',owner):[],returns:(user||profile?.mobile)?await list('return',owner):[],reviews,preferences:(user||profile?.mobile)?read(await row('preferences:'+owner),{emailUpdates:true,smsUpdates:false,personalized:true,preferredCategories:[],preferredSize:''}):null,addresses:(user||profile?.mobile)?await list('address',owner):[],settings:await settings(),
-      home:home.sections.filter(isLive),
+      home:home.sections.filter(s=>isLive(s)),
     },{headers:{'Cache-Control':'no-store'}});
     if(!cookie(req,'tz_bag'))result.headers.append('Set-Cookie',sessionCookie(req,'tz_bag',anon,2592000));
     return result;
@@ -365,7 +365,7 @@ export async function POST(req:Request){
         const current=await settings();
         const next={
           ...current,
-          announcement:clean(b.settings?.announcement,180),brandTagline:clean(b.settings?.brandTagline,180),freeShippingThreshold:Math.max(0,Math.round(number(b.settings?.freeShippingThreshold,current.freeShippingThreshold||1999))),supportEmail:clean(b.settings?.supportEmail,200),supportPhone:clean(b.settings?.supportPhone,40),
+          announcement:clean(b.settings?.announcement,180),brandTagline:clean(b.settings?.brandTagline,180),supportEmail:clean(b.settings?.supportEmail,200),supportPhone:clean(b.settings?.supportPhone,40),
           supportHours:clean(b.settings?.supportHours,120),returnsWindowDays:Math.max(0,Math.min(60,Math.round(number(b.settings?.returnsWindowDays,current.returnsWindowDays)))),freeShippingThreshold:Math.max(0,Math.min(100000,Math.round(number(b.settings?.freeShippingThreshold,current.freeShippingThreshold||1999)))),
           lowStockThreshold:Math.max(0,Math.min(1000,Math.round(number(b.settings?.lowStockThreshold,current.lowStockThreshold)))),
           shippingNote:clean(b.settings?.shippingNote,500),taxNote:clean(b.settings?.taxNote,500),storeStatus:['Preview','Live','Maintenance'].includes(b.settings?.storeStatus)?b.settings.storeStatus:current.storeStatus,
