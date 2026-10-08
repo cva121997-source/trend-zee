@@ -138,7 +138,7 @@ async function discountFor(value:any,subtotal:number,items:any[]=[],owner=''){
   if(c.usageLimit>0&&uses.length>=c.usageLimit)throw new Error('This coupon has reached its usage limit.');
   if(owner&&c.perUserLimit>0){const userUses=uses.filter((o:any)=>o.owner===owner);if(userUses.length>=c.perUserLimit)throw new Error('This coupon has reached its per-customer limit.');}
   const eligibleSubtotal=eligible.reduce((s:number,i:any)=>s+Number(i.price||0)*Number(i.quantity||0),0);
-  const raw=Math.round(eligibleSubtotal*c.percent/100),discount=c.maxDiscount>0?Math.min(raw,c.maxDiscount):raw;
+  const raw=c.discountType==='fixed'?Math.max(0,Number(c.fixedAmount||0)):Math.round(eligibleSubtotal*Number(c.percent||0)/100),discount=c.maxDiscount>0?Math.min(raw,c.maxDiscount):raw;
   return {code,discount};
 }
 
@@ -286,11 +286,11 @@ export async function POST(req:Request){
       if(action==='adminCoupon'){
         const c=b.coupon||{};
         const code=clean(c.code,30).toUpperCase();
-        const percent=number(c.percent,-1),minOrder=number(c.minOrder,-1);
+        const discountType=c.discountType==='fixed'?'fixed':'percent',percent=number(c.percent,0),fixedAmount=number(c.fixedAmount,0),minOrder=number(c.minOrder,-1);
         const expires=clean(c.expires,10),startsAt=clean(c.startsAt,10),maxDiscount=Math.max(0,number(c.maxDiscount,0)),usageLimit=Math.max(0,Math.round(number(c.usageLimit,0))),perUserLimit=Math.max(0,Math.round(number(c.perUserLimit,0))),productIds=Array.isArray(c.productIds)?c.productIds.map((x:any)=>clean(x,120)).filter(Boolean).slice(0,50):[],categories=Array.isArray(c.categories)?c.categories.map((x:any)=>clean(x,80)).filter(Boolean).slice(0,20):[];
         const today=new Date().toISOString().slice(0,10);
-        if(!/^[A-Z0-9_-]{3,30}$/.test(code)||percent<1||percent>80||minOrder<0||!/^\d{4}-\d{2}-\d{2}$/.test(expires)||expires<today||maxDiscount<0||usageLimit<0||perUserLimit<0||!/^$|^\d{4}-\d{2}-\d{2}$/.test(startsAt)||(startsAt&&startsAt>expires))throw new Error('Check coupon dates, discount, minimum order, caps and usage limits.');
-        await save('coupon:'+code,'coupon','admin',{code,percent,minOrder,maxDiscount,usageLimit,perUserLimit,productIds,categories,startsAt,expires,active:!!c.active});
+        if(!/^[A-Z0-9_-]{3,30}$/.test(code)||(discountType==='percent'?(percent<1||percent>80):(fixedAmount<1||fixedAmount>1000000))||minOrder<0||!/^\d{4}-\d{2}-\d{2}$/.test(expires)||expires<today||maxDiscount<0||usageLimit<0||perUserLimit<0||!/^$|^\d{4}-\d{2}-\d{2}$/.test(startsAt)||(startsAt&&startsAt>expires))throw new Error('Check coupon dates, discount, minimum order, caps and usage limits.');
+        await save('coupon:'+code,'coupon','admin',{code,discountType,percent:discountType==='percent'?percent:0,fixedAmount:discountType==='fixed'?fixedAmount:0,minOrder,maxDiscount,usageLimit,perUserLimit,productIds,categories,startsAt,expires,active:!!c.active});
         await audit('Promotion saved',code,{percent,minOrder,active:!!c.active});
         return NextResponse.json({ok:true});
       }
