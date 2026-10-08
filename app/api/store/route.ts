@@ -434,7 +434,7 @@ export async function POST(req:Request){
         if(!allowed.includes(b.status))throw new Error('Only paid orders can be dispatched. Connect verified payments first.');
         const now=new Date().toISOString();
         const next={...old,status:b.status,tracking:clean(b.tracking),courier:clean(b.courier),...(b.status==='Processing'&&!old.processingAt?{processingAt:now}:{}),...(b.status==='Dispatched'&&!old.dispatchedAt?{dispatchedAt:now}:{}),...(b.status==='Delivered'&&!old.deliveredAt?{deliveredAt:now}:{}),...(b.status==='Cancelled'&&!old.cancelledAt?{cancelledAt:now}:{})};
-        await save(r.id,r.kind,r.owner,next);
+        await save(r.id,r.kind,r.owner,next);await syncOrder(r.id,r.owner,next);
         await audit('Order updated',r.id,{status:next.status,courier:next.courier,tracking:next.tracking});
         if(next.status!==old.status){const notifyEvent=next.status==='Dispatched'?'shipped':next.status==='Delivered'?'delivered':next.status.toLowerCase();void notifyOrderEvent(next,notifyEvent);}
         return NextResponse.json({ok:true});
@@ -459,7 +459,7 @@ export async function POST(req:Request){
         if(!allowed.includes(b.status))throw new Error('Choose a valid support status.');
         const status=b.status;
         const next={...old,status,internalNote:clean(b.internalNote,3000)};
-        await save(r.id,r.kind,r.owner,next);
+        await save(r.id,r.kind,r.owner,next);await syncSupportTicket({...next,id:r.id,owner:r.owner});
         await audit('Support ticket updated',r.id,{status});
         return NextResponse.json({ok:true});
       }
@@ -469,7 +469,7 @@ export async function POST(req:Request){
         if(!allowed.includes(b.status))throw new Error('Choose a valid return status.');
         const status=b.status;
         const next={...old,status,internalNote:clean(b.internalNote,3000),refundAmount:Math.min(number(old.total,0),Math.max(0,number(b.refundAmount,old.refundAmount||0)))};
-        await save(r.id,r.kind,r.owner,next);
+        await save(r.id,r.kind,r.owner,next);await syncReturnCase({...next,id:r.id,owner:r.owner});
         await audit('Return case updated',r.id,{status,orderId:old.orderId,refundAmount:next.refundAmount});
         return NextResponse.json({ok:true});
       }
@@ -477,7 +477,8 @@ export async function POST(req:Request){
       if(action==='adminReview'&&r.kind==='review'){
         if(!['Pending','Published','Rejected'].includes(b.status))throw new Error('Choose a valid review status.');
         const status=b.status;
-        await save(r.id,r.kind,r.owner,{...old,status,moderationNote:clean(b.moderationNote,2000)});
+        const nextReview={...old,status,moderationNote:clean(b.moderationNote,2000)};
+        await save(r.id,r.kind,r.owner,nextReview);await syncReview({...nextReview,id:r.id,owner:r.owner});
         await audit('Product review moderated',r.id,{status,productId:old.productId});
         return NextResponse.json({ok:true});
       }
@@ -559,7 +560,8 @@ export async function POST(req:Request){
       const marker='review-helpful:'+owner+':'+reviewId;
       if(await row(marker))return NextResponse.json({ok:true,already:true,helpfulCount:Number(read(r).helpfulCount||0)});
       const old=read(r);const helpfulCount=Number(old.helpfulCount||0)+1;
-      await save(r.id,r.kind,r.owner,{...old,helpfulCount});
+      const nextReview={...old,helpfulCount};
+      await save(r.id,r.kind,r.owner,nextReview);await syncReview({...nextReview,id:r.id,owner:r.owner});
       await save(marker,'review_helpful',owner,{reviewId,createdAt:new Date().toISOString()});
       return NextResponse.json({ok:true,helpfulCount});
     }
