@@ -1,5 +1,4 @@
-import {database} from '@/lib/store-server';
-
+import {database,digest} from '@/lib/store-server';
 const clean=(v:unknown,max=300)=>String(v??'').trim().slice(0,max);
 const n=(v:unknown)=>Number.isFinite(Number(v))?Math.round(Number(v)):0;
 
@@ -39,4 +38,60 @@ export async function syncOrder(orderId:string,owner:string,order:any){
     await db.prepare('INSERT INTO order_items (id,order_id,product_id,variant_id,product_name,sku,size,color,quantity,unit_price,mrp,line_total) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)')
       .bind('OI-'+crypto.randomUUID(),orderId,item.productId,null,clean(item.name,180),clean(item.sku,80)||null,clean(item.size,40)||null,clean(item.color,80)||null,n(item.quantity),n(item.price),item.mrp||null,n(item.price)*n(item.quantity)).run();
   }
+}
+
+export async function syncInventoryMovement(movement:any){
+  const db=database(),now=movement.at||new Date().toISOString();
+  await db.prepare('INSERT INTO inventory_movements (id,product_id,variant_id,before_qty,after_qty,delta_qty,reason,actor_id,created_at) VALUES (?,?,?,?,?,?,?,?,?)')
+    .bind(clean(movement.id||'INV-'+crypto.randomUUID(),120),clean(movement.productId,120),clean(movement.variantId,120)||null,n(movement.before),n(movement.after),n(movement.adjustment),clean(movement.reason,500)||'Adjustment',clean(movement.actorId,120)||null,now).run();
+}
+
+export async function syncCoupon(coupon:any){
+  if(!coupon?.code)return;
+  const now=new Date().toISOString();
+  await database().prepare(`INSERT INTO coupons (code,discount_type,percent,fixed_amount,min_order,max_discount,product_ids,categories,usage_limit,per_user_limit,starts_at,ends_at,active,created_at,updated_at)
+    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+    ON CONFLICT(code) DO UPDATE SET discount_type=excluded.discount_type,percent=excluded.percent,fixed_amount=excluded.fixed_amount,min_order=excluded.min_order,max_discount=excluded.max_discount,product_ids=excluded.product_ids,categories=excluded.categories,usage_limit=excluded.usage_limit,per_user_limit=excluded.per_user_limit,starts_at=excluded.starts_at,ends_at=excluded.ends_at,active=excluded.active,updated_at=excluded.updated_at`)
+    .bind(clean(coupon.code,30).toUpperCase(),coupon.discountType==='fixed'?'fixed':'percent',n(coupon.percent),n(coupon.fixedAmount),n(coupon.minOrder),n(coupon.maxDiscount),JSON.stringify(Array.isArray(coupon.productIds)?coupon.productIds:[]),JSON.stringify(Array.isArray(coupon.categories)?coupon.categories:[]),n(coupon.usageLimit),n(coupon.perUserLimit),clean(coupon.startsAt,40)||null,clean(coupon.expires,40),coupon.active?1:0,coupon.createdAt||now,now).run();
+}
+
+export async function syncReview(review:any){
+  if(!review?.id||!review?.productId)return;
+  const now=new Date().toISOString();
+  await database().prepare(`INSERT INTO reviews (id,product_id,customer_id,order_id,rating,title,body,image_urls,helpful_count,status,moderation_note,created_at,updated_at)
+    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)
+    ON CONFLICT(id) DO UPDATE SET rating=excluded.rating,title=excluded.title,body=excluded.body,image_urls=excluded.image_urls,helpful_count=excluded.helpful_count,status=excluded.status,moderation_note=excluded.moderation_note,updated_at=excluded.updated_at`)
+    .bind(clean(review.id,120),clean(review.productId,120),String(review.owner||'').startsWith('guest:')?null:clean(review.owner,120)||null,clean(review.orderId,120)||null,n(review.rating),clean(review.title,120)||null,clean(review.message,3000),JSON.stringify(Array.isArray(review.imageUrls)?review.imageUrls:[]),n(review.helpfulCount),clean(review.status,40).toLowerCase()||'pending',clean(review.moderationNote,2000)||null,review.created||now,now).run();
+}
+
+export async function syncSupportTicket(ticket:any){
+  if(!ticket?.id)return;
+  const now=new Date().toISOString();
+  await database().prepare(`INSERT INTO support_tickets (id,customer_id,order_id,category,subject,message,status,internal_note,created_at,updated_at)
+    VALUES (?,?,?,?,?,?,?,?,?,?)
+    ON CONFLICT(id) DO UPDATE SET category=excluded.category,subject=excluded.subject,message=excluded.message,status=excluded.status,internal_note=excluded.internal_note,updated_at=excluded.updated_at`)
+    .bind(clean(ticket.id,120),String(ticket.owner||'').startsWith('guest:')?null:clean(ticket.owner,120)||null,clean(ticket.orderId,120)||null,clean(ticket.category,80)||'General',clean(ticket.subject,160),clean(ticket.message,3000),clean(ticket.status,50)||'New',clean(ticket.internalNote,3000)||null,ticket.created||now,now).run();
+}
+
+export async function syncReturnCase(item:any){
+  if(!item?.id||!item?.orderId)return;
+  const now=new Date().toISOString();
+  await database().prepare(`INSERT INTO returns (id,order_id,customer_id,reason,status,refund_amount,internal_note,created_at,updated_at)
+    VALUES (?,?,?,?,?,?,?,?,?)
+    ON CONFLICT(id) DO UPDATE SET status=excluded.status,refund_amount=excluded.refund_amount,internal_note=excluded.internal_note,updated_at=excluded.updated_at`)
+    .bind(clean(item.id,120),clean(item.orderId,120),String(item.owner||'').startsWith('guest:')?null:clean(item.owner,120)||null,clean(item.reason,1000),clean(item.status,50)||'Requested',n(item.refundAmount),clean(item.internalNote,3000)||null,item.created||now,now).run();
+}
+
+export async function syncAdminUser(user:any){
+  if(!user?.id||!user?.email)return;
+  const now=new Date().toISOString();
+  await database().prepare(`INSERT INTO admin_users (id,email,display_name,role,active,created_at,updated_at)
+    VALUES (?,?,?,?,?,?,?)
+    ON CONFLICT(id) DO UPDATE SET email=excluded.email,display_name=excluded.display_name,role=excluded.role,active=excluded.active,updated_at=excluded.updated_at`)
+    .bind(clean(user.id,120),clean(user.email,200).toLowerCase(),clean(user.displayName,120)||clean(user.username,120),clean(user.role,40)||'Owner',user.active===false?0:1,user.createdAt||now,now).run();
+}
+
+export async function removeAdminUser(userId:string){
+  if(!userId)return;
+  await database().prepare('DELETE FROM admin_users WHERE id=?').bind(userId).run();
 }
