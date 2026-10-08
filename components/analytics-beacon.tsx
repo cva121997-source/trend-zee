@@ -15,8 +15,8 @@ export default function AnalyticsBeacon(){
   const pathname=usePathname();
   useEffect(()=>{
     if(!pathname||pathname.startsWith('/admin'))return;
-    const query=new URLSearchParams(window.location.search).get('q')||'';
-    send('page_view',{path:pathname,query});
+    const params=new URLSearchParams(window.location.search);const query=params.get('q')||'';const metadata={referrer:document.referrer||'',utmSource:params.get('utm_source')||'',utmMedium:params.get('utm_medium')||'',utmCampaign:params.get('utm_campaign')||''};
+    send('page_view',{path:pathname,query,metadata});
     const productMatch=pathname.match(/^\/product\/([^/]+)/);
     if(productMatch)send('product_view',{path:pathname,productId:decodeURIComponent(productMatch[1])});
     if(pathname==='/shop')send('catalog_view',{path:pathname});
