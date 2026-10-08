@@ -317,6 +317,15 @@ export async function POST(req:Request){
         return NextResponse.json({ok:true,id:data.id});
       }
 
+      if(action==='adminDuplicateProduct'){
+        const id=clean(b.id,100);const record=await database().prepare('SELECT data FROM products WHERE id=? AND archived=0').bind(id).first<{data:string}>();
+        if(!record)throw new Error('Product not found.');
+        const source:Product=JSON.parse(record.data);const clone:Product={...source,id:crypto.randomUUID(),name:clean((source.name||'')+' — Copy',180),sku:source.sku?clean(source.sku+'-COPY',80):undefined,stock:0,variantStock:{}};
+        await database().prepare('INSERT INTO products (id,data,archived) VALUES (?,?,0)').bind(clone.id,JSON.stringify(clone)).run();
+        await audit('Product duplicated',clone.id,{sourceId:id,name:clone.name});
+        return NextResponse.json({ok:true,id:clone.id});
+      }
+
       if(action==='adminInventory'){
         const id=clean(b.id,100),reason=clean(b.reason,500);
         const desired=Number(b.stock);
