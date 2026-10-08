@@ -25,7 +25,7 @@ export default function ContentStudio(){
   const [data,setData]=useState<Data|null>(null);
   const [products,setProducts]=useState<Product[]>([]);
   const [tab,setTab]=useState<'homepage'|'collections'|'campaigns'|'categories'>('homepage');
-  const [selected,setSelected]=useState<HomepageSection|Collection|Campaign|CategoryContent|null>(null);
+  const [selected,setSelected]=useState<any>(null);
   const [loading,setLoading]=useState(true);
   const [busy,setBusy]=useState(false);
   const [error,setError]=useState('');
@@ -72,6 +72,7 @@ export default function ContentStudio(){
   const collections=(data?.collections||[]).slice().sort((a,b)=>a.sortOrder-b.sortOrder);
   const campaigns=(data?.campaigns||[]).slice();
   const categories=(data?.categories||[]).slice().sort((a,b)=>a.sortOrder-b.sortOrder);
+  const productNames=new Map(products.map(p=>[p.id,p.name]));
   
   if(loading)return <div className="admin-loading"><span className="logo">TREND ZEE</span><p>Loading content studio…</p></div>;
   if(!data)return <div className="admin-login premium-login"><Toaster richColors/><div className="login-brand"><span className="admin-mark">TZ</span><span>TREND ZEE<small>CONTENT STUDIO</small></span></div><div className="login-card"><span className="card-kicker">ADMIN ACCESS REQUIRED</span><h1>Shape the<br/><em>shopping story.</em></h1><p>Sign in through the main commerce admin first, then reopen Content Studio.</p>{error&&<div className="error-box">{error}</div>}<a className="button full" href="/admin">Open commerce admin</a></div></div>;
