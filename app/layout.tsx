@@ -1,27 +1,20 @@
 import type { Metadata } from "next";
 import "./globals.css";
 
-export const metadata: Metadata = {
-  title: "TREND ZEE — Wear your next chapter",
-  description: "Clothing, bags and footwear for every version of your day.",
-  other: {
-    "codex-preview": "development",
-  },
-  icons: {
-    icon: "/favicon.svg",
-    shortcut: "/favicon.svg",
-  },
+export const metadata:Metadata={
+  title:"Trend-Zee — Discover What's Next",
+  description:"Premium everyday fashion, accessories and footwear with an editorial shopping experience.",
+  applicationName:"Trend-Zee",
+  keywords:["Trend-Zee","fashion","clothing","bags","shoes","online shopping","India"],
+  metadataBase:new URL("https://trend-zee.vercel.app"),
+  alternates:{canonical:"/"},
+  openGraph:{title:"Trend-Zee — Discover What's Next",description:"Discover the next chapter of your everyday edit.",url:"https://trend-zee.vercel.app/",siteName:"Trend-Zee",type:"website"},
+  twitter:{card:"summary_large_image",title:"Trend-Zee — Discover What's Next",description:"Discover the next chapter of your everyday edit."},
+  icons:{icon:"/favicon.svg",shortcut:"/favicon.svg"},
 };
 
-export default function RootLayout({
-  children,
-}: Readonly<{
-  children: React.ReactNode;
-}>) {
-  return (
-    <html lang="en">
-      <body className="antialiased">{children}</body>
-    </html>
-  );
-}
+const organization={"@context":"https://schema.org","@type":"Organization","name":"Trend-Zee","url":"https://trend-zee.vercel.app/","logo":"https://trend-zee.vercel.app/favicon.svg"};
 
+export default function RootLayout({children}:{children:React.ReactNode}){
+ return <html lang="en"><body className="antialiased"><script type="application/ld+json" dangerouslySetInnerHTML={{__html:JSON.stringify(organization)}}/>{children}</body></html>;
+}
