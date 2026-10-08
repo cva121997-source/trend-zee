@@ -3,5 +3,13 @@
   "framework": "nextjs",
   "buildCommand": "npx next build",
   "installCommand": "npm ci --no-audit --no-fund",
-  "outputDirectory": ".next"
+  "outputDirectory": ".next",
+  "git": {
+    "deploymentEnabled": {
+      "premium-trend-zee-upgrade": false
+    }
+  },
+  "github": {
+    "autoAlias": false
+  }
 }
