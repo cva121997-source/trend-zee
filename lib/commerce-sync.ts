@@ -16,11 +16,12 @@ export async function syncAddress(addressId:string,customerId:string,address:any
   const now=new Date().toISOString();
   await database().prepare(`INSERT INTO addresses (id,customer_id,label,name,mobile,address_line1,address_line2,city,state,pincode,country,is_default,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)
     ON CONFLICT(id) DO UPDATE SET label=excluded.label,name=excluded.name,mobile=excluded.mobile,address_line1=excluded.address_line1,address_line2=excluded.address_line2,city=excluded.city,state=excluded.state,pincode=excluded.pincode,is_default=excluded.is_default,updated_at=excluded.updated_at`)
-    .bind(addressId,customerId,clean(address.label,60)||'Delivery',clean(address.name,100),clean(address.mobile,30),clean(address.address,1000),null,clean(address.city,100),clean(address.state,100),' '+clean(address.pincode,6), 'India',address.isDefault?1:0,address.createdAt||now,now).run();
+    .bind(addressId,customerId,clean(address.label,60)||'Delivery',clean(address.name,100),clean(address.mobile,30),clean(address.address,1000),null,clean(address.city,100),clean(address.state,100),clean(address.pincode,6),'India',address.isDefault?1:0,address.createdAt||now,now).run();
 }
 
 export async function syncProductVariants(product:any){
   const db=database(),now=new Date().toISOString(),variants=product.variantStock&&typeof product.variantStock==='object'?product.variantStock:{};
+  await db.prepare('DELETE FROM product_variants WHERE product_id=?').bind(product.id).run();
   for(const [key,stock] of Object.entries(variants)){
     const [size,color]=String(key).split('::');const id='VAR-'+crypto.randomUUID();
     await db.prepare(`INSERT INTO product_variants (id,product_id,sku,barcode,size,color,option_data,price,mrp,stock,low_stock_threshold,archived,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`)
