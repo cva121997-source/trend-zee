@@ -1,18 +1,17 @@
 'use client';
 
-import {useEffect,useMemo,useState} from 'react';
+import {useEffect,useState} from 'react';
 import {ArrowDown,ArrowUp,Check,ChevronLeft,Image as ImageIcon,Plus,Save,Trash2,Upload,X} from 'lucide-react';
 import {Toaster,toast} from 'sonner';
 import {api} from '@/lib/client';
 import {HomepageSection,HomepageSectionType,MotionPreset,Collection,Campaign,CategoryContent} from '@/lib/content';
-import {Product,money} from '@/lib/catalog';
+import {Product} from '@/lib/catalog';
 
 type Data={homepageSections:HomepageSection[];collections:Collection[];campaigns:Campaign[];categories:CategoryContent[]};
 const blankSection=():HomepageSection=>({id:crypto.randomUUID(),type:'product-carousel',kicker:'',title:'',description:'',ctaLabel:'Shop now',ctaHref:'#collection',secondaryCtaLabel:'',secondaryCtaHref:'',image:'',mobileImage:'',category:'All',collectionId:'',productIds:[],theme:'paper',layout:'standard',motion:'reveal',visible:true,sortOrder:100,scheduleStart:'',scheduleEnd:''});
 const blankCollection=():Collection=>({id:crypto.randomUUID(),title:'',description:'',coverImage:'',productIds:[],layout:'grid',visible:true,sortOrder:100,scheduleStart:'',scheduleEnd:''});
 const blankCampaign=():Campaign=>({id:crypto.randomUUID(),name:'',title:'',description:'',desktopImage:'',mobileImage:'',ctaLabel:'Shop now',ctaHref:'#collection',productIds:[],category:'All',discountLabel:'',startDate:'',endDate:'',status:'draft'});
 const blankCategory=():CategoryContent=>({slug:'',title:'',description:'',image:'',bannerImage:'',visible:true,sortOrder:100});
-const splitIds=(value:string)=>value.split(',').map(x=>x.trim()).filter(Boolean).slice(0,60);
 
 async function uploadImage(file:File){
   const body=new FormData();body.append('file',file);
@@ -73,13 +72,12 @@ export default function ContentStudio(){
   const collections=(data?.collections||[]).slice().sort((a,b)=>a.sortOrder-b.sortOrder);
   const campaigns=(data?.campaigns||[]).slice();
   const categories=(data?.categories||[]).slice().sort((a,b)=>a.sortOrder-b.sortOrder);
-  const productNames=useMemo(()=>new Map(products.map(p=>[p.id,p.name])),[products]);
-
+  
   if(loading)return <div className="admin-loading"><span className="logo">TREND ZEE</span><p>Loading content studio…</p></div>;
   if(!data)return <div className="admin-login premium-login"><Toaster richColors/><div className="login-brand"><span className="admin-mark">TZ</span><span>TREND ZEE<small>CONTENT STUDIO</small></span></div><div className="login-card"><span className="card-kicker">ADMIN ACCESS REQUIRED</span><h1>Shape the<br/><em>shopping story.</em></h1><p>Sign in through the main commerce admin first, then reopen Content Studio.</p>{error&&<div className="error-box">{error}</div>}<a className="button full" href="/admin">Open commerce admin</a></div></div>;
 
   const update=(key:string,value:any)=>setSelected(current=>current?{...current,[key]:value}:current);
-  const field=(label:string,key:string,wide=false,type='text')=><label className={wide?'wide':''}>{label}<input type={type} value={(selected as any)?.[key]||''} onChange={e=>update(key,e.target.value)}/></label>;
+  const field=(label:string,key:string,wide=false,type='text')=><label className={wide?'wide':''}>{label}<input type={type} value={Array.isArray((selected as any)?.[key])?(selected as any)[key].join(','):(selected as any)?.[key]||''} onChange={e=>update(key,key==='productIds'||key==='categories'?e.target.value.split(',').map(v=>v.trim()).filter(Boolean):e.target.value)}/></label>;
   const media=(label:string,key:string)=><div className="studio-media"><label>{label}<input value={(selected as any)?.[key]||''} onChange={e=>update(key,e.target.value)} placeholder="https://… or /images/…" /></label><label className="studio-upload"><Upload size={15}/><span>{uploading===key?'Uploading…':'Upload image'}</span><input type="file" accept="image/jpeg,image/png,image/webp" disabled={!!uploading} onChange={e=>{const f=e.target.files?.[0];if(f)upload(key,f);}}/></label>{(selected as any)?.[key]&&<img src={(selected as any)[key]} alt="" />}</div>;
   const saveKind='type' in (selected||{})?'homepage_section':'name' in (selected||{})?'campaign':'slug' in (selected||{})?'category':'collection';
 
