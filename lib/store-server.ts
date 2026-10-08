@@ -1,6 +1,59 @@
 import {runtimeEnv,envValue} from '@/lib/runtime-env';
 import {normalizeAdminRole,type AdminRole} from '@/lib/roles';
-export function database(){const env=runtimeEnv();if(!env.DB)throw new Error('Store storage is temporarily unavailable. Please try again.');return env.DB;}
+type PreparedLike={
+  bind(...values:unknown[]):PreparedLike;
+  first<T=any>():Promise<T|null>;
+  all<T=any>():Promise<{results:T[]}>;
+  run():Promise<any>;
+};
+type DatabaseLike={prepare(sql:string):PreparedLike;batch(statements:PreparedLike[]):Promise<any>};
+
+function normalizeSql(sql:string){
+  let q=sql.trim().replace(/;[\\s]*$/,'');
+  if(/INSERT\\s+OR\\s+IGNORE\\s+INTO/i.test(q)&&!/ON\\s+CONFLICT/i.test(q)){
+    q=q.replace(/INSERT\\s+OR\\s+IGNORE\\s+INTO/i,'INSERT INTO')+' ON CONFLICT DO NOTHING';
+  }
+  return q;
+}
+
+async function supabaseSql(sql:string,params:unknown[]){
+  const url=(envValue('SUPABASE_URL')||'https://hzlsjwcqdhdckftisgso.supabase.co').replace(/\\/$/,'');
+  const key=envValue('SUPABASE_SERVICE_ROLE_KEY');
+  if(!key)throw new Error('Supabase storage is not configured. Add SUPABASE_SERVICE_ROLE_KEY to Vercel.');
+  const response=await fetch(url+'/rest/v1/rpc/trend_zee_sql',{
+    method:'POST',
+    headers:{apikey:key,Authorization:'Bearer '+key,'Content-Type':'application/json'},
+    body:JSON.stringify({p_sql:normalizeSql(sql),p_params:params}),
+  });
+  const body=await response.text();
+  if(!response.ok)throw new Error(body.slice(0,500)||'Supabase database request failed.');
+  try{return JSON.parse(body);}catch{return [];}
+}
+
+class SupabasePreparedStatement implements PreparedLike{
+  private readonly sql:string;
+  private params:unknown[]=[];
+  constructor(sql:string){this.sql=sql;}
+  bind(...values:unknown[]){this.params=values;return this;}
+  async first<T=any>():Promise<T|null>{const rows=await supabaseSql(this.sql,this.params);return Array.isArray(rows)?(rows[0] as T|null):null;}
+  async all<T=any>():Promise<{results:T[]}>{const rows=await supabaseSql(this.sql,this.params);return {results:Array.isArray(rows)?rows as T[]:[]};}
+  async run(){await supabaseSql(this.sql,this.params);return {success:true};}
+}
+class SupabaseDatabase implements DatabaseLike{
+  prepare(sql:string){return new SupabasePreparedStatement(sql);}
+  async batch(statements:PreparedLike[]){for(const statement of statements)await statement.run();return statements.map(()=>({success:true}));}
+}
+
+let supabaseDatabase:SupabaseDatabase|undefined;
+export function database():DatabaseLike{
+  const env=runtimeEnv();
+  if(env.DB)return env.DB as unknown as DatabaseLike;
+  if(envValue('SUPABASE_SERVICE_ROLE_KEY')){
+    supabaseDatabase??=new SupabaseDatabase();
+    return supabaseDatabase;
+  }
+  throw new Error('Store storage is temporarily unavailable. Please try again.');
+}
 export async function row(id:string){return database().prepare('SELECT * FROM records WHERE id = ?').bind(id).first<any>();}
 export async function save(id:string,kind:string,owner:string,data:unknown){const now=new Date().toISOString();await database().prepare('INSERT INTO records (id,kind,owner,data,created,updated) VALUES (?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET data=excluded.data,updated=excluded.updated').bind(id,kind,owner,JSON.stringify(data),now,now).run();}
 export async function list(kind:string,owner?:string){const q=owner?database().prepare('SELECT * FROM records WHERE kind=? AND owner=? ORDER BY updated DESC').bind(kind,owner):database().prepare('SELECT * FROM records WHERE kind=? ORDER BY updated DESC').bind(kind);return (await q.all<any>()).results.map(r=>({...JSON.parse(r.data),id:r.id,owner:r.owner,created:r.created,updated:r.updated}));}
