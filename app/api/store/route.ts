@@ -105,11 +105,14 @@ async function validatedItems(input:any){
   return input.map((i:any)=>{
     const p=products.find(x=>x.id===i.productId);
     const quantity=Number(i.quantity);
-    counts.set(i.productId,(counts.get(i.productId)||0)+quantity);
-    if(!p||!Number.isInteger(quantity)||quantity<1||quantity>10||(counts.get(i.productId)||0)>p.stock||!p.sizes.includes(i.size)||!p.colors.includes(i.color)){
+    const variantKey=[String(i.size??''),String(i.color??'')].join('::').slice(0,220);
+    const countKey=p?.id+'::'+variantKey;
+    const available=p?.variantStock?.[variantKey] ?? p?.stock ?? 0;
+    counts.set(countKey,(counts.get(countKey)||0)+quantity);
+    if(!p||!Number.isInteger(quantity)||quantity<1||quantity>10||(counts.get(countKey)||0)>available||!p.sizes.includes(i.size)||!p.colors.includes(i.color)){
       throw new Error('A product, size, colour or quantity is unavailable. Please update your bag.');
     }
-    return {productId:p.id,name:p.name,size:i.size,color:i.color,quantity,price:p.price,image:p.images[0]};
+    return {productId:p.id,name:p.name,size:i.size,color:i.color,variantKey,quantity,price:p.price,image:p.images[0]};
   });
 }
 
@@ -298,7 +301,7 @@ export async function POST(req:Request){
           id:clean(p.id)||crypto.randomUUID(),name:clean(p.name),category:clean(p.category),type:clean(p.type),brand:clean(p.brand),
           price:Number(p.price),mrp:Number(p.mrp)>0?Number(p.mrp):undefined,sku:clean(p.sku,80),stock:Number(p.stock),colors:p.colors?.map((x:any)=>clean(x)).filter(Boolean),sizes:p.sizes?.map((x:any)=>clean(x)).filter(Boolean),
           images:p.images?.map((x:any)=>clean(x,2000)).filter(Boolean),hoverImage:clean(p.hoverImage,2000)||undefined,video:clean(p.video,2000)||undefined,badge:clean(p.badge,80)||undefined,tags:Array.isArray(p.tags)?p.tags.map((x:any)=>clean(x,60)).filter(Boolean).slice(0,20):[],
-          rating:Number(p.rating)||undefined,reviewCount:Number(p.reviewCount)||undefined,description:clean(p.description,2000),specifications:clean(p.specifications,2000),material:clean(p.material,300),care:clean(p.care,500),shipping:clean(p.shipping,500),returnPolicy:clean(p.returnPolicy,500),seoTitle:clean(p.seoTitle,160),seoDescription:clean(p.seoDescription,320),tag:clean(p.tag),
+          rating:Number(p.rating)||undefined,reviewCount:Number(p.reviewCount)||undefined,variantStock:p.variantStock&&typeof p.variantStock==='object'?Object.fromEntries(Object.entries(p.variantStock).map(([k,v])=>[clean(k,220),Math.max(0,Math.min(100000,Math.floor(Number(v))))]).filter(([,v])=>Number.isFinite(v as number))):undefined,description:clean(p.description,2000),specifications:clean(p.specifications,2000),material:clean(p.material,300),care:clean(p.care,500),shipping:clean(p.shipping,500),returnPolicy:clean(p.returnPolicy,500),seoTitle:clean(p.seoTitle,160),seoDescription:clean(p.seoDescription,320),tag:clean(p.tag),
         };
         if(data.mrp&&data.mrp<data.price)throw new Error('MRP must be greater than or equal to the selling price.');
         if(!data.name||!data.category||!data.type||!data.brand||!Number.isFinite(data.price)||data.price<1||data.price>1000000||!Number.isInteger(data.stock)||data.stock<0||!data.colors?.length||!data.sizes?.length||!data.images?.length||data.images.length>5||!data.images.every(x=>x.startsWith('/images/')||x.startsWith('/api/image/')||/^https:\/\//.test(x)))throw new Error('Check product name, category, type, brand, price, stock, variants and 1-5 image URLs.');
@@ -352,7 +355,7 @@ export async function POST(req:Request){
         const next={
           ...current,
           announcement:clean(b.settings?.announcement,180),brandTagline:clean(b.settings?.brandTagline,180),freeShippingThreshold:Math.max(0,Math.round(number(b.settings?.freeShippingThreshold,current.freeShippingThreshold||1999))),supportEmail:clean(b.settings?.supportEmail,200),supportPhone:clean(b.settings?.supportPhone,40),
-          supportHours:clean(b.settings?.supportHours,120),returnsWindowDays:Math.max(0,Math.min(60,Math.round(number(b.settings?.returnsWindowDays,current.returnsWindowDays)))),
+          supportHours:clean(b.settings?.supportHours,120),returnsWindowDays:Math.max(0,Math.min(60,Math.round(number(b.settings?.returnsWindowDays,current.returnsWindowDays)))),freeShippingThreshold:Math.max(0,Math.min(100000,Math.round(number(b.settings?.freeShippingThreshold,current.freeShippingThreshold||1999)))),
           lowStockThreshold:Math.max(0,Math.min(1000,Math.round(number(b.settings?.lowStockThreshold,current.lowStockThreshold)))),
           shippingNote:clean(b.settings?.shippingNote,500),taxNote:clean(b.settings?.taxNote,500),storeStatus:['Preview','Live','Maintenance'].includes(b.settings?.storeStatus)?b.settings.storeStatus:current.storeStatus,
         };
