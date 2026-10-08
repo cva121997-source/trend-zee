@@ -642,7 +642,7 @@ export async function POST(req:Request){
         database().prepare('INSERT INTO records (id,kind,owner,data,created,updated) VALUES (?,?,?,?,?,?)').bind(key,'idempotency',owner,JSON.stringify({id}),now,now),
         database().prepare('UPDATE records SET data=?,updated=? WHERE id=?').bind(JSON.stringify({...c,items:[]}),now,'cart:'+owner),
       ]);
-      return NextResponse.json({ok:true,id});
+      return NextResponse.json({ok:true,id,total,subtotal,discount:discount.discount,shipping,tax,shippingMethod:shippingMethod.id,coupon:discount.code});
     }
 
     throw new Error('Unknown action.');
