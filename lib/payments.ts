@@ -1,8 +1,8 @@
-import {env} from 'cloudflare:workers';
+import {envValue} from '@/lib/runtime-env';
 
 export type PaymentProvider='preview'|'mock'|'razorpay'|'custom';
 
-const secret=(name:string)=>String((env as any)[name]||process.env[name]||'');
+const secret=(name:string)=>envValue(name);
 
 export function paymentProvider():PaymentProvider{
   const value=secret('PAYMENT_PROVIDER').toLowerCase();
