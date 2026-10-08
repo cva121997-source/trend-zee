@@ -1,4 +1,22 @@
-import {runtimeEnv} from '@/lib/runtime-env';
 import {adminRole,checkOrigin} from '@/lib/store-server';
 import {canAdmin} from '@/lib/roles';
-export async function POST(req:Request){const env=runtimeEnv();try{checkOrigin(req);const role=await adminRole(req);if(!role)return Response.json({error:'Admin sign-in required.'},{status:401});if(!canAdmin(role,'adminProduct')&&!canAdmin(role,'adminContent'))return Response.json({error:'Your admin role cannot upload media.'},{status:403});const body=await req.formData();const file=body.get('file');if(!(file instanceof File)||file.size>5*1024*1024)throw new Error('Choose an image smaller than 5 MB.');const bytes=new Uint8Array(await file.arrayBuffer());const jpeg=bytes[0]===255&&bytes[1]===216&&bytes[2]===255;const png=bytes[0]===137&&bytes[1]===80&&bytes[2]===78&&bytes[3]===71;const webp=new TextDecoder().decode(bytes.slice(0,4))==='RIFF'&&new TextDecoder().decode(bytes.slice(8,12))==='WEBP';if(!jpeg&&!png&&!webp)throw new Error('Use a JPG, PNG or WebP image.');if(!env.BUCKET)throw new Error('Image storage is unavailable.');const key=crypto.randomUUID();await env.BUCKET.put(key,bytes,{httpMetadata:{contentType:jpeg?'image/jpeg':png?'image/png':'image/webp'}});return Response.json({url:'/api/image/'+key});}catch(e){return Response.json({error:e instanceof Error?e.message:'Upload failed.'},{status:400});}}
+import {uploadSupabaseMedia} from '@/lib/supabase-storage';
+
+export async function POST(req:Request){
+  try{
+    checkOrigin(req);
+    const role=await adminRole(req);
+    if(!role)return Response.json({error:'Admin sign-in required.'},{status:401});
+    if(!canAdmin(role,'adminProduct')&&!canAdmin(role,'adminContent'))return Response.json({error:'Your admin role cannot upload media.'},{status:403});
+    const body=await req.formData();const file=body.get('file');
+    if(!(file instanceof File)||file.size>5*1024*1024)throw new Error('Choose an image smaller than 5 MB.');
+    const bytes=new Uint8Array(await file.arrayBuffer());
+    const jpeg=bytes[0]===255&&bytes[1]===216&&bytes[2]===255;
+    const png=bytes[0]===137&&bytes[1]===80&&bytes[2]===78&&bytes[3]===71;
+    const webp=new TextDecoder().decode(bytes.slice(0,4))==='RIFF'&&new TextDecoder().decode(bytes.slice(8,12))==='WEBP';
+    if(!jpeg&&!png&&!webp)throw new Error('Use a JPG, PNG or WebP image.');
+    const key=crypto.randomUUID();
+    const url=await uploadSupabaseMedia(key,bytes,jpeg?'image/jpeg':png?'image/png':'image/webp');
+    return Response.json({url,id:key});
+  }catch(e){return Response.json({error:e instanceof Error?e.message:'Upload failed.'},{status:400});}
+}
