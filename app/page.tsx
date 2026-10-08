@@ -12,7 +12,7 @@ import {Toaster,toast} from 'sonner';
 import {Product,money} from '@/lib/catalog';
 import {api} from '@/lib/client';
 import HomeSections from '@/components/home-sections';
-import type {Section} from '@/lib/home';
+import {defaultSections,type Section} from '@/lib/home';
 
 type Item={productId:string;quantity:number;size:string;color:string;name?:string;price?:number;image?:string};
 type StoreSettings={announcement:string;supportEmail:string;supportPhone:string;supportHours:string;returnsWindowDays:number;shippingNote:string;taxNote:string;storeStatus:string;freeShippingThreshold:number};
@@ -225,11 +225,7 @@ export default function Store(){
     {mobileNavOpen&&<div className="mobile-nav-panel" role="dialog" aria-label="Mobile navigation"><div className="mobile-nav-links"><button onClick={()=>{browse('All');setMobileNavOpen(false)}}>Shop all</button>{availableCategories.filter(c=>c!=='All').map(c=><button key={c} onClick={()=>{browse(c);setMobileNavOpen(false)}}>{c}</button>)}<a href="/wishlist" onClick={()=>setMobileNavOpen(false)}>Saved items</a><a href="/account" onClick={()=>setMobileNavOpen(false)}>Account</a><a href="/search" onClick={()=>setMobileNavOpen(false)}>Search</a><a href="/admin" onClick={()=>setMobileNavOpen(false)}>Admin portal</a><button onClick={()=>{setPanel('support');setMobileNavOpen(false)}}>Help</button></div></div>}
 
     <main>
-      {home.length ? <HomeSections sections={home} products={products} renderProduct={productCard} onNavigate={homeLink}/> : <>
-        <section className="hero"><div className="hero-copy"><span className="eyebrow"><i className="tiny-rule"/>NEW CHAPTER · EVERYDAY EDIT</span><h1>Wear your<br/><em>next chapter.</em></h1><p>Clothing, bags and footwear chosen for the different versions of your day. Browse freely, save favourites, and build your bag before sharing any contact details.</p><button className="button" onClick={()=>browse('All')}>Explore the collection <ChevronRight size={16}/></button><div className="hero-foot">DESIGNED FOR THE DAYS THAT KEEP MOVING</div></div><div className="hero-image"><img src="/images/hero.jpg" alt="TREND ZEE everyday style collection"/><div className="hero-sticker">MADE FOR<br/><i>what’s next</i></div><span className="image-caption">TREND ZEE · EVERYDAY STORIES</span></div></section>
-        <div className="ticker"><span>SHOP YOUR WAY</span><span className="star">✦</span><span>SAVE YOUR FAVOURITES</span><span className="star">✦</span><span>TRACK EVERY ORDER</span><span className="star">✦</span><span>SUPPORT WHEN YOU NEED IT</span></div>
-        <section className="commerce-promises"><div><ShieldCheck/><span><b>Clear order status</b><small>Paid revenue is never confused with unpaid requests.</small></span></div><div><Truck/><span><b>Delivery visibility</b><small>Courier and tracking appear when fulfilment is connected.</small></span></div><div><RotateCcw/><span><b>Return-ready account</b><small>{settings.returnsWindowDays}-day return workflow for eligible delivered paid orders.</small></span></div><div><Headphones/><span><b>Built-in support</b><small>{settings.supportHours||'Support hours available in your account.'}</small></span></div></section>
-      </>}
+      <HomeSections sections={home.length?home:defaultSections} products={products} renderProduct={productCard} onNavigate={homeLink}/>
       <div id="sections-start" aria-hidden="true" className="sr-only">Trend-Zee shopping story</div>
       {campaigns.length>0&&<section className="campaign-live-bar"><div>{campaigns[0].discountLabel&&<span className="eyebrow">{campaigns[0].discountLabel}</span>}<strong>{campaigns[0].title}</strong><small>{campaigns[0].description}</small></div><a className="button compact" href={campaigns[0].ctaHref||'#collection'} onClick={e=>{if(homeLink(campaigns[0].ctaHref||'#collection'))e.preventDefault()}}>{campaigns[0].ctaLabel||'Shop now'} <ChevronRight size={15}/></a></section>}
             <section className="collection" id="collection">
