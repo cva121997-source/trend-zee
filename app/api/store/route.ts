@@ -249,6 +249,25 @@ export async function POST(req:Request){
       if(!role)return NextResponse.json({error:'Please sign in as admin.'},{status:401});
       if(!canAdmin(role,action))return NextResponse.json({error:`Your ${role} role cannot perform this action.`},{status:403});
 
+      if(action==='adminChangePassword'){
+        if(role!=='Owner')return NextResponse.json({error:'Only an Owner can change the administrator password.'},{status:403});
+        const currentPassword=String(b.currentPassword??'');
+        const newPassword=String(b.newPassword??'');
+        const confirmPassword=String(b.confirmPassword??'');
+        if(!currentPassword)throw new Error('Enter your current password.');
+        if(newPassword.length<12||newPassword.length>200)throw new Error('The new password must be between 12 and 200 characters.');
+        if(newPassword!==confirmPassword)throw new Error('The new passwords do not match.');
+        const adminRecord=(await list('admin_user')).find((x:any)=>String(x.username||x.email||'').toLowerCase()==='admin'&&x.active!==false);
+        const currentHash=String(adminRecord?.passwordHash||secret('ADMIN_PASSWORD_HASH')||'');
+        if(!currentHash||await digest(currentPassword)!==currentHash)throw new Error('Your current password is incorrect.');
+        const now=new Date().toISOString();
+        const id=String(adminRecord?.id||'admin-user:primary');
+        const account={...adminRecord,id,username:'Admin',email:adminRecord?.email||'admin@trend-zee.local',displayName:adminRecord?.displayName||'Store Owner',role:'Owner',active:true,passwordHash:await digest(newPassword),createdAt:adminRecord?.createdAt||now,updatedAt:now};
+        await save(id,'admin_user','admin',account);
+        await audit('Administrator password changed','admin-user:primary',{username:'Admin'});
+        return NextResponse.json({ok:true});
+      }
+
       if(action==='adminContent'){
         const kind=clean(b.kind,40);
         const incoming=b.record||{};
