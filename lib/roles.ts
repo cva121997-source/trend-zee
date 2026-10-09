@@ -32,6 +32,7 @@ const actionPermission:Record<string,string>={
   adminReview:'content',
   adminTeamSave:'access',
   adminTeamRemove:'access',
+  adminChangePassword:'access',
 };
 
 export function normalizeAdminRole(value:unknown):AdminRole{
