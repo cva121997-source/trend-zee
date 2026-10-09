@@ -19,7 +19,7 @@ export async function uploadSupabaseMedia(path:string,bytes:Uint8Array,contentTy
   const r=await fetch(projectUrl()+'/storage/v1/object/media/'+path.split('/').map(encodeURIComponent).join('/'),{
     method:'POST',
     headers:{...headers(),'Content-Type':contentType,'Cache-Control':'public, max-age=31536000','x-upsert':'true'},
-    body:bytes,
+    body:Uint8Array.from(bytes).buffer as ArrayBuffer,
   });
   if(!r.ok)throw new Error((await r.text()).slice(0,300)||'Supabase media upload failed.');
   return supabaseMediaUrl(path);
